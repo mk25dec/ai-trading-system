@@ -25,7 +25,10 @@ Deploy this repo as a **Docker Compose** resource in Coolify.
 | `WEB_PORT` | `80` |
 
 4. Map your domain to the **web** service (port 80). The nginx container proxies `/api` and `/health` to the API service — no separate public API domain is required.
-5. Deploy. Coolify builds `api` and `web` images. Postgres is **external** — create or attach a Coolify database and paste its internal connection URL into `DATABASE_URL`.
+5. Deploy. Coolify builds `api` and `web` images. Postgres is **external**:
+   - Paste the database **internal** URL into `DATABASE_URL`.
+   - Ensure the API container can reach Postgres: in the Compose app → **Connect to Predefined Network** → select the same network as your Postgres resource (required if the DB hostname is an internal Coolify name like `swr70…`).
+6. If deploy fails with `api is unhealthy`, open **api** container logs. Look for `database connect retry` (network) or `migrate` (schema/permissions).
 
 ## TLS
 

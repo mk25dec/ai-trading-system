@@ -33,7 +33,7 @@ func main() {
 	}
 
 	ctx := context.Background()
-	pool, err := db.Connect(ctx, cfg.DatabaseURL)
+	pool, err := db.ConnectWithRetry(ctx, cfg.DatabaseURL, 30, 2*time.Second)
 	if err != nil {
 		slog.Error("database connect", "err", err)
 		os.Exit(1)
@@ -117,6 +117,8 @@ func main() {
 			os.Exit(1)
 		}
 	}()
+
+	slog.Info("api ready")
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
