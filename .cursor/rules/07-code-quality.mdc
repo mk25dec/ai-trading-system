@@ -1,0 +1,41 @@
+---
+alwaysApply: true
+---
+
+# Code quality
+
+These principles are language-agnostic. Language- and framework-specific coding standards belong in `docs/adr/`.
+
+## Type safety
+
+- Prefer the strictest type system your language offers. Avoid escape hatches (e.g. `any`, `object`, `dynamic`, `interface{}`) unless the reason is unavoidable and local.
+- Use interfaces, protocols, or abstract types to define contracts between modules. Depend on abstractions, not implementations.
+- When the language supports generics, use them over casting or type-widening.
+- Validate external input at the boundary with schemas or narrow parsing. Never trust data that crosses a trust boundary.
+
+## Error handling
+
+- Handle errors explicitly at every level. Never ignore a return value or catch block.
+- Use typed or structured errors where the language supports them. Include context: what failed, why, and what the caller can do about it.
+- Fail fast on unrecoverable errors. Degrade gracefully on recoverable ones.
+
+## Debuggability
+
+- Write code that is easy to step through: small functions, explicit control flow, no hidden side effects.
+- Use descriptive names. If a variable or function needs a comment to explain what it is, rename it.
+- Prefer explicit over clever. A readable 5-line solution beats a cryptic 1-liner.
+
+## Structure
+
+- Keep business logic in services, utilities, and domain modules — not in transport layers, templates, or configuration.
+- Keep functions focused, composable, and easy to reason about. A function should do one thing well.
+- Prefer editing source files rather than generated artifacts. Do not hand-edit build outputs.
+
+## Performance awareness
+
+- Choose appropriate algorithms and data structures from the start. Avoid O(n^2) when O(n log n) or O(n) is available. Don't prematurely optimize, but don't prematurely pessimize either.
+
+## Contracts
+
+- Update contract tests when API, schema, or interface shapes change.
+- Test permission checks, filtering, and error paths when behavior depends on them.

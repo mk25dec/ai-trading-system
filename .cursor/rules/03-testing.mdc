@@ -1,0 +1,31 @@
+---
+alwaysApply: true
+---
+
+# Testing
+
+The testing strategy is project-specific and belongs in `docs/adr/`. This rule defines the process for establishing and following that strategy.
+
+## Before writing any test code
+
+If no testing ADR exists in `docs/adr/`, stop and ask the user about the following — one question at a time:
+
+1. **Test runner** — Vitest, Jest, Playwright, pytest, Go test, etc.
+2. **Unit test approach** — co-located with source or separate `tests/` tree?
+3. **Integration / E2E scope** — API-level, browser-level, both, neither for now?
+4. **Coverage target** — percentage goal, or "critical paths only"?
+5. **CI integration** — run on every push, PR only, manual?
+6. **Mocking philosophy** — minimal mocks (real DB in tests), full isolation, or mixed?
+
+Record the answers as an ADR and follow them for all subsequent work.
+
+## Ongoing rules
+
+- Follow TDD when the `superpowers:test-driven-development` skill is active: write the failing test first, verify it fails, implement, verify it passes, commit.
+- Every bug fix gets a regression test before the fix is applied.
+- Never skip test verification steps in a plan. If a test command is specified, run it and cite the output.
+- Keep test files near the code they test unless the ADR says otherwise.
+- Do not mock what you do not own — prefer fakes or real instances for external services when practical.
+- Every new feature must ship with automated tests that cover its acceptance criteria. No feature is done without tests.
+- Every public function, API endpoint, or user-facing flow gets at least one happy-path test and one error-path test.
+- Tests must be deterministic. No flaky tests, no time-dependent assertions, no order-dependent test suites.
