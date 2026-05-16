@@ -8,7 +8,7 @@ Monorepo for the trading control plane: **Go API** + **React dashboard**, deploy
 |------|---------|
 | `api/` | Go REST API (auth, users, workspaces) |
 | `web/` | React + Vite + Shadcn UI dashboard |
-| `docker-compose.yml` | Production stack (Postgres, API, web) |
+| `docker-compose.yml` | Production stack (API + web; external `DATABASE_URL`) |
 | `docker-compose.dev.yml` | Local Postgres only |
 | `docs/adr/` | Architecture decisions |
 | `docs/plans/` | Implementation plans |
@@ -53,8 +53,10 @@ Open http://localhost:5173 and sign in with `ADMIN_EMAIL` / `ADMIN_PASSWORD`.
 ## Production (Docker Compose / Coolify)
 
 ```bash
-docker compose up -d --build
+docker compose --env-file .env up -d --build
 ```
+
+Set `DATABASE_URL` in `.env` (or Coolify env vars) to your Postgres connection string.
 
 - Dashboard: http://localhost (port `WEB_PORT`, default 80)
 - API health: proxied at `/health`
@@ -66,7 +68,7 @@ See [docs/runbooks/coolify-deploy.md](docs/runbooks/coolify-deploy.md) for Cooli
 
 | Variable | Description |
 |----------|-------------|
-| `POSTGRES_PASSWORD` | Database password |
+| `DATABASE_URL` | Postgres connection URL (Coolify internal hostname in production) |
 | `JWT_SECRET` | Signing key for session cookies |
 | `ADMIN_PASSWORD` | Bootstrap admin password (first run only) |
 | `CORS_ORIGIN` | Public dashboard URL (e.g. `https://app.example.com`) |

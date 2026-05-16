@@ -16,9 +16,7 @@ Deploy this repo as a **Docker Compose** resource in Coolify.
 
 | Variable | Example |
 |----------|---------|
-| `POSTGRES_USER` | `trading` |
-| `POSTGRES_PASSWORD` | *(strong secret)* |
-| `POSTGRES_DB` | `trading` |
+| `DATABASE_URL` | `postgres://user:pass@coolify-db-host:5432/postgres?sslmode=disable` |
 | `JWT_SECRET` | *(long random string)* |
 | `ADMIN_EMAIL` | `admin@yourdomain.com` |
 | `ADMIN_PASSWORD` | *(change after first login)* |
@@ -27,7 +25,7 @@ Deploy this repo as a **Docker Compose** resource in Coolify.
 | `WEB_PORT` | `80` |
 
 4. Map your domain to the **web** service (port 80). The nginx container proxies `/api` and `/health` to the API service — no separate public API domain is required.
-5. Deploy. Coolify builds `api` and `web` images and starts Postgres with a persistent volume.
+5. Deploy. Coolify builds `api` and `web` images. Postgres is **external** — create or attach a Coolify database and paste its internal connection URL into `DATABASE_URL`.
 
 ## TLS
 
@@ -40,7 +38,7 @@ Terminate TLS at Coolify’s reverse proxy (Traefik/Caddy). Set `SECURE_COOKIES=
 
 ## Upgrades
 
-Redeploy from Coolify after pushing to the tracked branch. Postgres data persists in the `postgres_data` volume.
+Redeploy from Coolify after pushing to the tracked branch. Database data is managed by your Coolify Postgres resource, not this compose file.
 
 ## Local parity
 
