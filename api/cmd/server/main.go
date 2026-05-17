@@ -183,6 +183,19 @@ func registerAPIRoutes(r chi.Router, cfg config.Config, pool *pgxpool.Pool) {
 		},
 	}
 	pipelinePublic := handlers.PipelinePublicHandler{Store: pipeline, Workspaces: workspaces}
+	researchHandler := handlers.ResearchHandler{
+		Store:      pipeline,
+		Workspaces: workspaces,
+		Finbert: &services.FinbertClient{
+			BaseURL: cfg.FinbertURL,
+			APIKey:  cfg.FinbertAPIKey,
+		},
+		Alpaca: &services.AlpacaClient{
+			DataURL: cfg.AlpacaDataURL,
+			Key:     cfg.AlpacaAPIKey,
+			Secret:  cfg.AlpacaAPISecret,
+		},
+	}
 
 	loadUser := func(ctx context.Context, id string) (*models.User, error) {
 		return users.GetByID(ctx, id)
@@ -230,6 +243,8 @@ func registerAPIRoutes(r chi.Router, cfg config.Config, pool *pgxpool.Pool) {
 				r.Get("/{id}/signals", pipelinePublic.ListWorkspaceSignals)
 				r.Get("/{id}/watchlist", pipelinePublic.GetWatchlist)
 				r.Put("/{id}/watchlist", pipelinePublic.SetWatchlist)
+				r.Get("/{id}/research", researchHandler.GetBoard)
+				r.Post("/{id}/research/refresh", researchHandler.Refresh)
 			})
 
 			r.Get("/workflows/runs", pipelinePublic.ListWorkflowRuns)

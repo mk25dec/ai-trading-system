@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -716,6 +717,89 @@ func (s *PipelineStore) SentimentRowsSince(ctx context.Context, since time.Time)
 			return nil, err
 		}
 		list = append(list, r)
+	}
+	return list, rows.Err()
+}
+
+func (s *PipelineStore) EnsureSymbols(ctx context.Context, symbols []string) error {
+	for _, sym := range symbols {
+		sym = strings.ToUpper(strings.TrimSpace(sym))
+		if sym == "" {
+			continue
+		}
+		_, err := s.pool.Exec(ctx, `
+			INSERT INTO symbols (symbol, name, is_active, updated_at)
+			VALUES ($1, $1, TRUE, NOW())
+			ON CONFLICT (symbol) DO UPDATE SET is_active = TRUE, updated_at = NOW()`,
+			sym)
+		if err != nil {
+			return fmt.Errorf("ensure symbol %s: %w", sym, err)
+		}
+	}
+	return nil
+}
+
+func (s *PipelineStore) SymbolName(ctx context.Context, symbol string) (string, error) {
+	var name string
+	err := s.pool.QueryRow(ctx, `SELECT name FROM symbols WHERE symbol = $1`, symbol).Scan(&name)
+	if err != nil {
+		return symbol, nil
+	}
+	if name == "" {
+		return symbol, nil
+	}
+	return name, nil
+}
+
+func (s *PipelineStore) LatestSignalsBySymbol(ctx context.Context, workspaceID string) (map[string]models.WorkspaceSignal, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT DISTINCT ON (symbol)
+			id, workspace_id, symbol, ts, action, direction, score, confidence, reasons,
+			source_snapshot_timestamp, expires_at, status, created_at
+		FROM workspace_signals
+		WHERE workspace_id = $1
+		ORDER BY symbol, ts DESC`, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make(map[string]models.WorkspaceSignal)
+	for rows.Next() {
+		var sig models.WorkspaceSignal
+		var reasons []byte
+		if err := rows.Scan(&sig.ID, &sig.WorkspaceID, &sig.Symbol, &sig.Timestamp, &sig.Action, &sig.Direction,
+			&sig.Score, &sig.Confidence, &reasons, &sig.SourceSnapshotTimestamp, &sig.ExpiresAt, &sig.Status, &sig.CreatedAt); err != nil {
+			return nil, err
+		}
+		_ = json.Unmarshal(reasons, &sig.Reasons)
+		out[sig.Symbol] = sig
+	}
+	return out, rows.Err()
+}
+
+func (s *PipelineStore) RecentHeadlines(ctx context.Context, symbol string, limit int) ([]models.ResearchHeadline, error) {
+	if limit <= 0 {
+		limit = 5
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT a.title, a.url, a.published_at,
+			COALESCE(s.sentiment_label, ''), COALESCE(s.sentiment_score, 0)
+		FROM news_articles a
+		INNER JOIN article_symbols sym ON sym.article_id = a.id AND sym.symbol = $1
+		LEFT JOIN article_sentiment s ON s.article_id = a.id AND s.symbol = $1
+		ORDER BY COALESCE(a.published_at, a.created_at) DESC
+		LIMIT $2`, symbol, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var list []models.ResearchHeadline
+	for rows.Next() {
+		var h models.ResearchHeadline
+		if err := rows.Scan(&h.Title, &h.URL, &h.PublishedAt, &h.SentimentLabel, &h.SentimentScore); err != nil {
+			return nil, err
+		}
+		list = append(list, h)
 	}
 	return list, rows.Err()
 }

@@ -81,6 +81,9 @@ See [docs/runbooks/coolify-deploy.md](docs/runbooks/coolify-deploy.md) for Cooli
 - `GET /api/v1/users/lookup` (assign workspace members)
 - `GET/POST/PATCH/DELETE /api/v1/workspaces`
 - `GET/POST/PATCH/DELETE /api/v1/workspaces/:id/members`
+- `GET/PUT /api/v1/workspaces/:id/watchlist` — per-workspace stock list
+- `GET /api/v1/workspaces/:id/research` — watchlist board (market + FinBERT + signals)
+- `POST /api/v1/workspaces/:id/research/refresh` — ingest Alpaca + FinBERT for watchlist only
 
 ### Pipeline (n8n + internal API)
 

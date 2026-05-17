@@ -4,6 +4,7 @@ import {
   BarChart3,
   Building2,
   LayoutDashboard,
+  LineChart,
   LogOut,
   Newspaper,
   TrendingUp,
@@ -27,6 +28,7 @@ import { Button } from "@/components/ui/button"
 
 const nav = [
   { title: "Overview", href: "/", icon: LayoutDashboard },
+  { title: "Research", href: "/research", icon: LineChart },
   { title: "Data health", href: "/data-health", icon: Activity },
   { title: "News", href: "/news", icon: Newspaper },
   { title: "Market data", href: "/symbols", icon: TrendingUp },

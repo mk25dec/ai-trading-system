@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
 import { Link } from "react-router-dom"
-import { Plus, Settings2, Zap } from "lucide-react"
+import { LineChart, Plus, Settings2, Zap } from "lucide-react"
 import { toast } from "sonner"
 import { api, type WorkspaceWithRole } from "@/lib/api"
 import { Badge } from "@/components/ui/badge"
@@ -73,6 +73,14 @@ function WorkspaceTable({
                 <Badge variant="secondary">{ws.role || "—"}</Badge>
               </TableCell>
               <TableCell className="flex gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  render={<Link to="/research" />}
+                >
+                  <LineChart className="size-4" />
+                  Research
+                </Button>
                 <Button
                   variant="ghost"
                   size="sm"

@@ -165,7 +165,12 @@ func (h PipelinePublicHandler) SetWatchlist(w http.ResponseWriter, r *http.Reque
 		WriteError(w, http.StatusBadRequest, "invalid JSON")
 		return
 	}
-	if err := h.Store.SetWatchlist(r.Context(), workspaceID, req.Symbols); err != nil {
+	symbols := normalizeSymbols(req.Symbols)
+	if err := h.Store.EnsureSymbols(r.Context(), symbols); err != nil {
+		WriteError(w, http.StatusInternalServerError, "symbol setup failed")
+		return
+	}
+	if err := h.Store.SetWatchlist(r.Context(), workspaceID, symbols); err != nil {
 		WriteError(w, http.StatusInternalServerError, "save failed")
 		return
 	}

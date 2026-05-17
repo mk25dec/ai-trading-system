@@ -459,44 +459,11 @@ func (h PipelineInternalHandler) generateSignalsForWorkspace(ctx context.Context
 		}
 		mf, _ := h.Store.LatestMarketFeatures(ctx, w.Symbol)
 		nf, _ := h.Store.LatestNewsFeatures(ctx, w.Symbol)
-		score := 0.0
-		reasons := []any{}
-		action := "watch"
-
-		if mf != nil && mf.PriceChange24h != nil && *mf.PriceChange24h > 2 {
-			score += 1
-			reasons = append(reasons, map[string]any{"type": "momentum", "value": *mf.PriceChange24h})
-			action = "buy_candidate"
-		}
-		if nf != nil && nf.AvgSentiment24h != nil && *nf.AvgSentiment24h < -0.4 {
-			score -= 1
-			reasons = append(reasons, map[string]any{"type": "negative_sentiment", "value": *nf.AvgSentiment24h})
-			action = "avoid"
-		}
-		if nf != nil && nf.PositiveNewsSpike {
-			score += 0.5
-			reasons = append(reasons, map[string]any{"type": "positive_news_spike"})
-		}
-
-		conf := 0.5 + score*0.1
-		if conf > 1 {
-			conf = 1
-		}
-		if conf < 0.1 {
-			conf = 0.1
-		}
-
-		signals = append(signals, models.WorkspaceSignal{
-			WorkspaceID: workspaceID,
-			Symbol:      w.Symbol,
-			Timestamp:   now,
-			Action:      action,
-			Direction:   "long",
-			Score:       score,
-			Confidence:  conf,
-			Reasons:     reasons,
-			ExpiresAt:   &expires,
-		})
+		rec := services.ComputeRecommendation(w.Symbol, mf, nf)
+		sig := services.WorkspaceSignalFromRecommendation(workspaceID, w.Symbol, rec)
+		sig.Timestamp = now
+		sig.ExpiresAt = &expires
+		signals = append(signals, sig)
 	}
 
 	if err := h.Store.InsertSignals(ctx, signals); err != nil {
