@@ -12,9 +12,10 @@ import (
 )
 
 var (
-	tagRe      = regexp.MustCompile(`(?is)<(script|style)[^>]*>.*?</\1>`)
-	htmlTagRe  = regexp.MustCompile(`(?s)<[^>]+>`)
-	spaceRe    = regexp.MustCompile(`\s+`)
+	scriptTagRe = regexp.MustCompile(`(?is)<script[^>]*>.*?</script>`)
+	styleTagRe  = regexp.MustCompile(`(?is)<style[^>]*>.*?</style>`)
+	htmlTagRe   = regexp.MustCompile(`(?s)<[^>]+>`)
+	spaceRe     = regexp.MustCompile(`\s+`)
 )
 
 func CanonicalURL(raw string) string {
@@ -57,7 +58,8 @@ func FetchAndCleanArticle(ctx context.Context, url string, client *http.Client) 
 }
 
 func CleanHTMLText(html string) string {
-	s := tagRe.ReplaceAllString(html, " ")
+	s := scriptTagRe.ReplaceAllString(html, " ")
+	s = styleTagRe.ReplaceAllString(s, " ")
 	s = htmlTagRe.ReplaceAllString(s, " ")
 	s = strings.ReplaceAll(s, "&nbsp;", " ")
 	s = spaceRe.ReplaceAllString(s, " ")
