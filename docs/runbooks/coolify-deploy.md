@@ -20,35 +20,28 @@ Deploy this repo as a **Docker Compose** resource in Coolify.
 | `SECURE_COOKIES` | yes (HTTPS) | `true` |
 | `ADMIN_EMAIL` | no | `admin@yourdomain.com` |
 | `API_PORT` | no | `8090` (default) |
-| `WEB_PORT` | no | `80` (default) |
+| `WEB_PORT` | no | Not used in production compose (`expose` only; Coolify proxies port 80) |
+
+## Fix: `network swr70… declared as external, but could not be found`
+
+You used the **Postgres hostname** (`swr70ljso04l5io36pgk3vsg`) as `DATABASE_NETWORK_NAME`. That is wrong.
+
+| Variable | What it is | Example |
+|----------|------------|---------|
+| Host in `DATABASE_URL` | DNS name of Postgres on the shared network | `swr70ljso04l5io36pgk3vsg` |
+| `DATABASE_NETWORK_NAME` | Docker **network** name both containers join | `coolify` |
+
+**Fix:** In Coolify env vars, either **delete** `DATABASE_NETWORK_NAME` (compose defaults to `coolify`) or set:
+
+```env
+DATABASE_NETWORK_NAME=coolify
+```
+
+Keep `DATABASE_URL` unchanged (still using `swr70ljso04l5io36pgk3vsg` as host). Redeploy.
 
 ## Fix: `lookup swr70… on 127.0.0.11:53: server misbehaving`
 
-The API container and Postgres are on **different Docker networks**. The hostname in `DATABASE_URL` only resolves on the Postgres network.
-
-### Option A — Set `DATABASE_NETWORK_NAME` (recommended, in git)
-
-1. On the Coolify server (SSH or terminal), find the Postgres container:
-
-```bash
-docker ps --filter "ancestor=postgres" --format '{{.Names}}'
-```
-
-2. List its networks (pick the non-bridge `coolify` / UUID name, not only `bridge`):
-
-```bash
-docker inspect <postgres-container-name> --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{"\n"}}{{end}}'
-```
-
-3. In Coolify → Compose app → **Environment Variables**, add:
-
-```env
-DATABASE_NETWORK_NAME=swr70ljso04l5io36pgk3vsg
-```
-
-Use the network name from step 2. On many Coolify installs it is **the same string** as the hostname in `DATABASE_URL`.
-
-4. Redeploy.
+The API container and Postgres are on **different Docker networks**. Join the `coolify` network (see above).
 
 ### Option B — Coolify UI (in addition or instead)
 
@@ -60,7 +53,7 @@ You should still set `DATABASE_NETWORK_NAME` in env so `docker-compose.yml` atta
 
 1. Create a **Docker Compose** application → repo root → `docker-compose.yml`.
 2. Set all environment variables above.
-3. Map your domain to the **web** service (port 80). Nginx proxies `/api` and `/health` to `api`.
+3. Map your domain to the **web** service (container port **80**). Do not set `ports: 80:80` in compose — Coolify already uses host port 80 for its proxy (`port is already allocated` if you bind it twice). Nginx in `web` proxies `/api` and `/health` to `api`.
 4. Deploy. In **api** logs you want `database target` then `api ready`.
 
 ## Verify

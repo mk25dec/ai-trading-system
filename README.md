@@ -53,10 +53,10 @@ Open http://localhost:5173 and sign in with `ADMIN_EMAIL` / `ADMIN_PASSWORD`.
 ## Production (Docker Compose / Coolify)
 
 ```bash
-docker compose --env-file .env up -d --build
+docker compose --env-file .env -f docker-compose.yml -f docker-compose.local.yml up -d --build
 ```
 
-Set `DATABASE_URL` and `DATABASE_NETWORK_NAME` in Coolify (see [coolify-deploy runbook](docs/runbooks/coolify-deploy.md)).
+Open http://localhost:8080. For Coolify, use `docker-compose.yml` only (see [coolify-deploy runbook](docs/runbooks/coolify-deploy.md)).
 
 - Dashboard: http://localhost (port `WEB_PORT`, default 80)
 - API health: proxied at `/health`

@@ -1,5 +1,5 @@
-# Production / Coolify. Requires DATABASE_NETWORK_NAME = Docker network your
-# Coolify Postgres container uses (often the same string as the DB hostname).
+# Production / Coolify. DATABASE_NETWORK_NAME is the Docker *network* name (usually
+# "coolify"), NOT the hostname inside DATABASE_URL (often a swr70… UUID).
 services:
   api:
     build:
@@ -38,12 +38,13 @@ services:
     depends_on:
       api:
         condition: service_started
-    ports:
-      - "${WEB_PORT:-80}:80"
+    # Coolify proxy routes to this port — do not bind host :80 (already used by Coolify).
+    expose:
+      - "80"
     networks:
       - default
 
 networks:
   database:
     external: true
-    name: ${DATABASE_NETWORK_NAME:?set DATABASE_NETWORK_NAME}
+    name: ${DATABASE_NETWORK_NAME:-coolify}
