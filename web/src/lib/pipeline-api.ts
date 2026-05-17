@@ -152,16 +152,26 @@ export interface ResearchStockRow {
   updatedAt?: string
 }
 
+export interface ResearchDiagnostics {
+  alpacaConfigured: boolean
+  alpacaFeed?: string
+  symbolsWithCandles: number
+  symbolsWithMarketFeatures: number
+  hint?: string
+}
+
 export interface ResearchBoard {
   workspaceId: string
   workspaceName: string
   symbols: string[]
   rows: ResearchStockRow[]
   refreshedAt?: string
+  diagnostics: ResearchDiagnostics
 }
 
 export interface ResearchRefreshResult {
   symbolsProcessed: number
+  candlesFetched: number
   candlesInserted: number
   sentimentProcessed: number
   signalsGenerated: number

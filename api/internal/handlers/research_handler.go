@@ -14,10 +14,12 @@ import (
 )
 
 type ResearchHandler struct {
-	Store      *store.PipelineStore
-	Workspaces *store.WorkspaceStore
-	Finbert    *services.FinbertClient
-	Alpaca     *services.AlpacaClient
+	Store         *store.PipelineStore
+	Workspaces    *store.WorkspaceStore
+	Finbert       *services.FinbertClient
+	Alpaca        *services.AlpacaClient
+	AlpacaFeed    string
+	AlpacaKeySet  bool
 }
 
 func (h ResearchHandler) GetBoard(w http.ResponseWriter, r *http.Request) {
@@ -49,6 +51,10 @@ func (h ResearchHandler) GetBoard(w http.ResponseWriter, r *http.Request) {
 
 	storedSignals, _ := h.Store.LatestSignalsBySymbol(r.Context(), workspaceID)
 	rows := make([]models.ResearchStockRow, 0, len(symbols))
+	diag := models.ResearchDiagnostics{
+		AlpacaConfigured: h.AlpacaKeySet,
+		AlpacaFeed:       h.AlpacaFeed,
+	}
 
 	for _, sym := range symbols {
 		row, err := h.buildRow(r.Context(), sym, storedSignals[sym])
@@ -56,6 +62,12 @@ func (h ResearchHandler) GetBoard(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		rows = append(rows, row)
+		if len(row.Candles) > 0 {
+			diag.SymbolsWithCandles++
+		}
+		if row.Market != nil {
+			diag.SymbolsWithMarketFeatures++
+		}
 	}
 
 	var refreshedAt *time.Time
@@ -64,13 +76,32 @@ func (h ResearchHandler) GetBoard(w http.ResponseWriter, r *http.Request) {
 		refreshedAt = &t
 	}
 
+	diag.Hint = researchHint(diag, len(symbols))
+
 	writeJSON(w, http.StatusOK, models.ResearchBoard{
 		WorkspaceID:   workspaceID,
 		WorkspaceName: ws.Name,
 		Symbols:       symbols,
 		Rows:          rows,
 		RefreshedAt:   refreshedAt,
+		Diagnostics:   diag,
 	})
+}
+
+func researchHint(d models.ResearchDiagnostics, symbolCount int) string {
+	if symbolCount == 0 {
+		return "Add symbols to your watchlist, then click Refresh data."
+	}
+	if !d.AlpacaConfigured {
+		return "Set ALPACA_API_KEY and ALPACA_API_SECRET on the API service, then redeploy and click Refresh data."
+	}
+	if d.SymbolsWithCandles == 0 {
+		return "No price candles in the database. Click Refresh data. Free Alpaca accounts need ALPACA_DATA_FEED=iex (default)."
+	}
+	if d.SymbolsWithMarketFeatures == 0 {
+		return "Candles exist but market features are missing — click Refresh data again."
+	}
+	return ""
 }
 
 func (h ResearchHandler) Refresh(w http.ResponseWriter, r *http.Request) {
@@ -116,6 +147,7 @@ func (h ResearchHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			errs = append(errs, "alpaca: "+err.Error())
 		} else {
+			result.CandlesFetched = len(candles)
 			n, err := h.Store.UpsertCandles(r.Context(), candles)
 			if err != nil {
 				errs = append(errs, "candles: "+err.Error())

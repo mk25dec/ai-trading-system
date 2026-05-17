@@ -195,13 +195,17 @@ export function ResearchPage() {
       queryClient.invalidateQueries({ queryKey: ["research-board", workspaceId] })
       const parts = [
         `${result.symbolsProcessed} symbols`,
-        `${result.candlesInserted} candles`,
+        `${result.candlesFetched} fetched`,
+        `${result.candlesInserted} candles stored`,
         `${result.sentimentProcessed} FinBERT runs`,
         `${result.signalsGenerated} signals`,
       ]
-      toast.success(`Refresh complete: ${parts.join(" · ")}`)
       if (result.errors?.length) {
-        toast.warning(result.errors.join("; "))
+        toast.error(result.errors.join("; "))
+      } else if (result.candlesFetched === 0) {
+        toast.error("No market bars returned from Alpaca — check API keys and ALPACA_DATA_FEED=iex")
+      } else {
+        toast.success(`Refresh complete: ${parts.join(" · ")}`)
       }
     },
     onError: (e: Error) => toast.error(e.message),
@@ -285,6 +289,21 @@ export function ResearchPage() {
           </Button>
         </div>
       </header>
+
+      {board.data?.diagnostics?.hint && (
+        <Card className="border-amber-500/40 bg-amber-500/5 shadow-sm">
+          <CardContent className="py-4 text-sm text-amber-950 dark:text-amber-100">
+            <p className="font-medium">Market data not loaded</p>
+            <p className="mt-1 text-muted-foreground">{board.data.diagnostics.hint}</p>
+            {board.data.diagnostics.alpacaConfigured && (
+              <p className="mt-2 font-mono text-xs text-muted-foreground">
+                Alpaca feed: {board.data.diagnostics.alpacaFeed ?? "iex"} · symbols with candles:{" "}
+                {board.data.diagnostics.symbolsWithCandles}/{board.data.symbols.length}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="border-border/70 shadow-sm">
         <CardHeader className="pb-3">

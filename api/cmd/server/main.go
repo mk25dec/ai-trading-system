@@ -167,6 +167,12 @@ func registerAPIRoutes(r chi.Router, cfg config.Config, pool *pgxpool.Pool) {
 		DuckPath: cfg.DuckDBPath,
 	}
 
+	alpacaClient := &services.AlpacaClient{
+		DataURL:  cfg.AlpacaDataURL,
+		DataFeed: cfg.AlpacaDataFeed,
+		Key:      cfg.AlpacaAPIKey,
+		Secret:   cfg.AlpacaAPISecret,
+	}
 	pipelineInternal := handlers.PipelineInternalHandler{
 		PipelineDeps: handlers.PipelineDeps{
 			Store: pipeline,
@@ -175,26 +181,21 @@ func registerAPIRoutes(r chi.Router, cfg config.Config, pool *pgxpool.Pool) {
 				BaseURL: cfg.FinbertURL,
 				APIKey:  cfg.FinbertAPIKey,
 			},
-			Alpaca: &services.AlpacaClient{
-				DataURL: cfg.AlpacaDataURL,
-				Key:     cfg.AlpacaAPIKey,
-				Secret:  cfg.AlpacaAPISecret,
-			},
+			Alpaca: alpacaClient,
 		},
 	}
+
 	pipelinePublic := handlers.PipelinePublicHandler{Store: pipeline, Workspaces: workspaces}
 	researchHandler := handlers.ResearchHandler{
-		Store:      pipeline,
-		Workspaces: workspaces,
+		Store:        pipeline,
+		Workspaces:   workspaces,
+		AlpacaFeed:   cfg.AlpacaDataFeed,
+		AlpacaKeySet: cfg.AlpacaAPIKey != "" && cfg.AlpacaAPISecret != "",
 		Finbert: &services.FinbertClient{
 			BaseURL: cfg.FinbertURL,
 			APIKey:  cfg.FinbertAPIKey,
 		},
-		Alpaca: &services.AlpacaClient{
-			DataURL: cfg.AlpacaDataURL,
-			Key:     cfg.AlpacaAPIKey,
-			Secret:  cfg.AlpacaAPISecret,
-		},
+		Alpaca: alpacaClient,
 	}
 
 	loadUser := func(ctx context.Context, id string) (*models.User, error) {

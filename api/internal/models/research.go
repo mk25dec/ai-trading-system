@@ -26,18 +26,28 @@ type ResearchStockRow struct {
 	UpdatedAt      *time.Time        `json:"updatedAt,omitempty"`
 }
 
+type ResearchDiagnostics struct {
+	AlpacaConfigured          bool   `json:"alpacaConfigured"`
+	AlpacaFeed                string `json:"alpacaFeed,omitempty"`
+	SymbolsWithCandles        int    `json:"symbolsWithCandles"`
+	SymbolsWithMarketFeatures int    `json:"symbolsWithMarketFeatures"`
+	Hint                      string `json:"hint,omitempty"`
+}
+
 type ResearchBoard struct {
-	WorkspaceID   string             `json:"workspaceId"`
-	WorkspaceName string             `json:"workspaceName"`
-	Symbols       []string           `json:"symbols"`
-	Rows          []ResearchStockRow `json:"rows"`
-	RefreshedAt   *time.Time         `json:"refreshedAt,omitempty"`
+	WorkspaceID   string              `json:"workspaceId"`
+	WorkspaceName string              `json:"workspaceName"`
+	Symbols       []string            `json:"symbols"`
+	Rows          []ResearchStockRow  `json:"rows"`
+	RefreshedAt   *time.Time          `json:"refreshedAt,omitempty"`
+	Diagnostics   ResearchDiagnostics `json:"diagnostics"`
 }
 
 type ResearchRefreshResult struct {
-	SymbolsProcessed int            `json:"symbolsProcessed"`
-	CandlesInserted  int            `json:"candlesInserted"`
-	SentimentRuns    int            `json:"sentimentProcessed"`
-	SignalsGenerated int            `json:"signalsGenerated"`
-	Errors           []string         `json:"errors,omitempty"`
+	SymbolsProcessed int      `json:"symbolsProcessed"`
+	CandlesFetched   int      `json:"candlesFetched"`
+	CandlesInserted  int      `json:"candlesInserted"`
+	SentimentRuns    int      `json:"sentimentProcessed"`
+	SignalsGenerated int      `json:"signalsGenerated"`
+	Errors           []string `json:"errors,omitempty"`
 }

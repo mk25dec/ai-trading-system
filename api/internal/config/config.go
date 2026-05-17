@@ -20,6 +20,7 @@ type Config struct {
 	FinbertURL        string
 	FinbertAPIKey     string
 	AlpacaDataURL     string
+	AlpacaDataFeed    string
 	AlpacaAPIKey      string
 	AlpacaAPISecret   string
 	FinnhubAPIKey     string
@@ -70,6 +71,7 @@ func Load() (Config, error) {
 		FinbertURL:      stringsTrimSuffix(envOr("FINBERT_URL", envOr("FINBERT_API_URL", "")), "/"),
 		FinbertAPIKey:   os.Getenv("FINBERT_API_KEY"),
 		AlpacaDataURL:   stringsTrimSuffix(envOr("ALPACA_DATA_URL", "https://data.alpaca.markets/v2"), "/"),
+		AlpacaDataFeed:  envOr("ALPACA_DATA_FEED", "iex"),
 		AlpacaAPIKey:    os.Getenv("ALPACA_API_KEY"),
 		AlpacaAPISecret: os.Getenv("ALPACA_API_SECRET"),
 		FinnhubAPIKey:   os.Getenv("FINNHUB_API_KEY"),
