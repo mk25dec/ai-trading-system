@@ -16,7 +16,7 @@ services:
       SECURE_COOKIES: ${SECURE_COOKIES:-false}
       DUCKDB_PATH: ${DUCKDB_PATH:-/data/analytics.duckdb}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:?set INTERNAL_API_KEY}
-      FINBERT_URL: ${FINBERT_URL:-}
+      FINBERT_URL: ${FINBERT_URL:-${FINBERT_API_URL:-https://finbert.derisory.nl}}
       FINBERT_API_KEY: ${FINBERT_API_KEY:-}
       ALPACA_DATA_URL: ${ALPACA_DATA_URL:-https://data.alpaca.markets/v2}
       ALPACA_API_KEY: ${ALPACA_API_KEY:-}

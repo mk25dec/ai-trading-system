@@ -552,12 +552,24 @@ func (h PipelineInternalHandler) IngestRSS(w http.ResponseWriter, r *http.Reques
 		req.Source = "rss"
 	}
 
-	resp, err := http.Get(req.FeedURL)
+	httpReq, err := http.NewRequestWithContext(r.Context(), http.MethodGet, req.FeedURL, nil)
+	if err != nil {
+		WriteError(w, http.StatusBadGateway, "feed request failed")
+		return
+	}
+	httpReq.Header.Set("User-Agent", "TradingAI-Bot/1.0")
+	httpReq.Header.Set("Accept", "application/rss+xml, application/xml, text/xml, */*")
+
+	resp, err := http.DefaultClient.Do(httpReq)
 	if err != nil {
 		WriteError(w, http.StatusBadGateway, "feed fetch failed")
 		return
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		WriteError(w, http.StatusBadGateway, "feed returned non-200")
+		return
+	}
 
 	var feed rssFeed
 	if err := xml.NewDecoder(resp.Body).Decode(&feed); err != nil {

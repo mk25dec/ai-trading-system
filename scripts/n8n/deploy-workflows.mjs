@@ -12,7 +12,8 @@
 
 const N8N_URL = (process.env.N8N_URL || "").replace(/\/$/, "");
 const N8N_API_KEY = process.env.N8N_API_KEY || "";
-const API_BASE = (process.env.API_INTERNAL_BASE_URL || "http://api:8090").replace(/\/$/, "");
+// Use /api/v1/internal so requests work through the web nginx proxy (trading.derisory.nl).
+const API_BASE = (process.env.API_INTERNAL_BASE_URL || "https://trading.derisory.nl/api/v1").replace(/\/$/, "");
 const INTERNAL_KEY = process.env.INTERNAL_API_KEY || "";
 const RSS_FEED = process.env.RSS_FEED_URL || "https://finance.yahoo.com/news/rssindex";
 const RSS_SOURCE = process.env.RSS_SOURCE || "yahoo_finance_rss";
