@@ -18,7 +18,7 @@ export function OverviewPage() {
           Hello{user?.name ? `, ${user.name.split(" ")[0]}` : ""}
         </h1>
         <p className="mt-2 text-muted-foreground">
-          Foundation for your trading control plane — workspaces and access first.
+          Monitor news ingestion, market data, features, and workspace signals from the sidebar.
         </p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

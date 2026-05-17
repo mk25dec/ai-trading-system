@@ -1,8 +1,12 @@
 import { Link, useLocation } from "react-router-dom"
 import {
+  Activity,
+  BarChart3,
   Building2,
   LayoutDashboard,
   LogOut,
+  Newspaper,
+  TrendingUp,
   Users,
 } from "lucide-react"
 import { useAuth } from "@/lib/auth"
@@ -23,6 +27,10 @@ import { Button } from "@/components/ui/button"
 
 const nav = [
   { title: "Overview", href: "/", icon: LayoutDashboard },
+  { title: "Data health", href: "/data-health", icon: Activity },
+  { title: "News", href: "/news", icon: Newspaper },
+  { title: "Market data", href: "/symbols", icon: TrendingUp },
+  { title: "Features", href: "/features", icon: BarChart3 },
   { title: "Workspaces", href: "/workspaces", icon: Building2 },
 ]
 

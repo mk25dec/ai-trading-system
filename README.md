@@ -82,4 +82,15 @@ See [docs/runbooks/coolify-deploy.md](docs/runbooks/coolify-deploy.md) for Cooli
 - `GET/POST/PATCH/DELETE /api/v1/workspaces`
 - `GET/POST/PATCH/DELETE /api/v1/workspaces/:id/members`
 
-Trading endpoints (symbols, signals, Alpaca) are planned in later milestones — see `docs/briefings/PROJECT.md`.
+### Pipeline (n8n + internal API)
+
+- Public dashboard: `/api/v1/news/*`, `/api/v1/symbols/*`, `/api/v1/features/*`, `/api/v1/workflows/runs`, workspace signals/watchlist
+- Internal (n8n): `/internal/*` with header `X-Internal-Api-Key` — see `docs/briefings/INITIAL_WORKFLOWS.md`
+
+Deploy n8n workflows:
+
+```bash
+node scripts/n8n/deploy-workflows.mjs
+```
+
+Requires `N8N_URL`, `N8N_API_KEY`, `API_INTERNAL_BASE_URL`, `INTERNAL_API_KEY` in the environment.

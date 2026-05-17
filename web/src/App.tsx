@@ -7,6 +7,11 @@ import { ProtectedRoute } from "@/components/protected-route"
 import { AuthProvider } from "@/lib/auth"
 import { LoginPage } from "@/pages/login-page"
 import { OverviewPage } from "@/pages/overview-page"
+import { DataHealthPage } from "@/pages/data-health-page"
+import { NewsPage } from "@/pages/news-page"
+import { SymbolsPage } from "@/pages/symbols-page"
+import { FeaturesPage } from "@/pages/features-page"
+import { WorkspaceSignalsPage } from "@/pages/workspace-signals-page"
 import { UsersPage } from "@/pages/users-page"
 import { WorkspacesPage } from "@/pages/workspaces-page"
 import { WorkspaceMembersPage } from "@/pages/workspace-members-page"
@@ -33,8 +38,13 @@ export default function App() {
               <Route element={<ProtectedRoute />}>
                 <Route element={<AppLayout />}>
                   <Route index element={<OverviewPage />} />
+                  <Route path="data-health" element={<DataHealthPage />} />
+                  <Route path="news" element={<NewsPage />} />
+                  <Route path="symbols" element={<SymbolsPage />} />
+                  <Route path="features" element={<FeaturesPage />} />
                   <Route path="workspaces" element={<WorkspacesPage />} />
                   <Route path="workspaces/:id/members" element={<WorkspaceMembersPage />} />
+                  <Route path="workspaces/:id/signals" element={<WorkspaceSignalsPage />} />
                   <Route
                     path="users"
                     element={

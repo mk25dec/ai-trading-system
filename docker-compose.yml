@@ -15,6 +15,13 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD}
       SECURE_COOKIES: ${SECURE_COOKIES:-false}
       DUCKDB_PATH: ${DUCKDB_PATH:-/data/analytics.duckdb}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?set INTERNAL_API_KEY}
+      FINBERT_URL: ${FINBERT_URL:-}
+      FINBERT_API_KEY: ${FINBERT_API_KEY:-}
+      ALPACA_DATA_URL: ${ALPACA_DATA_URL:-https://data.alpaca.markets/v2}
+      ALPACA_API_KEY: ${ALPACA_API_KEY:-}
+      ALPACA_API_SECRET: ${ALPACA_API_SECRET:-}
+      FINNHUB_API_KEY: ${FINNHUB_API_KEY:-}
     volumes:
       - duckdb_data:/data
     expose:

@@ -75,3 +75,28 @@ func (s *Store) migrate(ctx context.Context) error {
 
 	return nil
 }
+
+// Status reports migration version and row counts for operational checks.
+func (s *Store) Status(ctx context.Context) (map[string]any, error) {
+	var version int
+	if err := s.db.QueryRowContext(ctx, `SELECT COALESCE(MAX(version), 0) FROM schema_migrations`).Scan(&version); err != nil {
+		return nil, fmt.Errorf("schema version: %w", err)
+	}
+
+	counts := make(map[string]int64)
+	for table, query := range map[string]string{
+		"symbols":       `SELECT COUNT(*) FROM symbols`,
+		"decision_logs": `SELECT COUNT(*) FROM decision_logs`,
+	} {
+		var n int64
+		if err := s.db.QueryRowContext(ctx, query).Scan(&n); err != nil {
+			return nil, fmt.Errorf("count %s: %w", table, err)
+		}
+		counts[table] = n
+	}
+
+	return map[string]any{
+		"schema_version": version,
+		"tables":         counts,
+	}, nil
+}

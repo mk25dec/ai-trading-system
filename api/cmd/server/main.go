@@ -22,6 +22,7 @@ import (
 	"github.com/joeydekruis/ai-trading-system/api/internal/handlers"
 	"github.com/joeydekruis/ai-trading-system/api/internal/httputil"
 	"github.com/joeydekruis/ai-trading-system/api/internal/models"
+	"github.com/joeydekruis/ai-trading-system/api/internal/services"
 	"github.com/joeydekruis/ai-trading-system/api/internal/store"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -154,12 +155,34 @@ func initPostgres(ctx context.Context, cfg config.Config, apiRouter chi.Router, 
 func registerAPIRoutes(r chi.Router, cfg config.Config, pool *pgxpool.Pool) {
 	users := store.NewUserStore(pool)
 	workspaces := store.NewWorkspaceStore(pool)
+	pipeline := store.NewPipelineStore(pool)
 	bootstrap.EnsureAdmin(context.Background(), users, cfg.AdminEmail, cfg.AdminPassword)
 
 	authHandler := handlers.AuthHandler{Users: users, JWTSecret: cfg.JWTSecret, SecureCookies: cfg.SecureCookies}
 	userHandler := handlers.UserHandler{Users: users}
 	workspaceHandler := handlers.WorkspaceHandler{Workspaces: workspaces}
 	memberHandler := handlers.MemberHandler{Workspaces: workspaces, Users: users}
+	analyticsHandler := handlers.AnalyticsHandler{
+		Store:    func() *duckdbstore.Store { return analyticsDB },
+		DuckPath: cfg.DuckDBPath,
+	}
+
+	pipelineInternal := handlers.PipelineInternalHandler{
+		PipelineDeps: handlers.PipelineDeps{
+			Store: pipeline,
+			Cfg:   cfg,
+			Finbert: &services.FinbertClient{
+				BaseURL: cfg.FinbertURL,
+				APIKey:  cfg.FinbertAPIKey,
+			},
+			Alpaca: &services.AlpacaClient{
+				DataURL: cfg.AlpacaDataURL,
+				Key:     cfg.AlpacaAPIKey,
+				Secret:  cfg.AlpacaAPISecret,
+			},
+		},
+	}
+	pipelinePublic := handlers.PipelinePublicHandler{Store: pipeline, Workspaces: workspaces}
 
 	loadUser := func(ctx context.Context, id string) (*models.User, error) {
 		return users.GetByID(ctx, id)
@@ -180,6 +203,7 @@ func registerAPIRoutes(r chi.Router, cfg config.Config, pool *pgxpool.Pool) {
 		r.Group(func(r chi.Router) {
 			r.Use(appmw.RequireAuth(cfg.JWTSecret, loadUser))
 			r.Get("/auth/me", authHandler.Me)
+			r.Get("/analytics/status", analyticsHandler.Status)
 
 			r.Get("/users/lookup", userHandler.Lookup)
 
@@ -202,7 +226,50 @@ func registerAPIRoutes(r chi.Router, cfg config.Config, pool *pgxpool.Pool) {
 				r.Post("/{id}/members", memberHandler.Add)
 				r.Patch("/{id}/members/{userId}", memberHandler.Update)
 				r.Delete("/{id}/members/{userId}", memberHandler.Remove)
+
+				r.Get("/{id}/signals", pipelinePublic.ListWorkspaceSignals)
+				r.Get("/{id}/watchlist", pipelinePublic.GetWatchlist)
+				r.Put("/{id}/watchlist", pipelinePublic.SetWatchlist)
 			})
+
+			r.Get("/workflows/runs", pipelinePublic.ListWorkflowRuns)
+			r.Get("/news/backlog", pipelinePublic.ListBacklog)
+			r.Get("/news/articles", pipelinePublic.ListArticles)
+			r.Get("/symbols", pipelinePublic.ListSymbols)
+			r.Get("/symbols/snapshots/latest", pipelinePublic.LatestSnapshots)
+			r.Get("/features/market/latest", pipelinePublic.LatestMarketFeatures)
+			r.Get("/features/news/latest", pipelinePublic.LatestNewsFeatures)
+		})
+
+		r.Route("/internal", func(r chi.Router) {
+			r.Use(appmw.RequireInternalKey(cfg.InternalAPIKey))
+
+			r.Post("/workflows/runs/start", pipelineInternal.StartWorkflowRun)
+			r.Post("/workflows/runs/end", pipelineInternal.EndWorkflowRun)
+
+			r.Post("/news/backlog/upsert", pipelineInternal.UpsertBacklog)
+			r.Get("/news/backlog/next", pipelineInternal.NextBacklog)
+			r.Post("/news/backlog/{id}/status", pipelineInternal.SetBacklogStatus)
+			r.Post("/news/rss/ingest", pipelineInternal.IngestRSS)
+			r.Post("/news/backlog/process-batch", pipelineInternal.ProcessBacklogBatch)
+
+			r.Post("/news/articles/upsert", pipelineInternal.UpsertArticle)
+			r.Get("/news/articles/unmapped", pipelineInternal.UnmappedArticles)
+			r.Post("/news/articles/map-symbols", pipelineInternal.MapArticleSymbols)
+			r.Post("/news/articles/{id}/symbols", pipelineInternal.SetArticleSymbols)
+
+			r.Get("/news/sentiment/pending", pipelineInternal.PendingSentiment)
+			r.Post("/news/sentiment/run-batch", pipelineInternal.RunSentimentBatch)
+			r.Post("/news/sentiment/upsert", pipelineInternal.UpsertSentiment)
+
+			r.Post("/market/candles/upsert", pipelineInternal.UpsertCandles)
+			r.Post("/market/candles/ingest-alpaca", pipelineInternal.IngestAlpaca)
+			r.Post("/features/market/generate", pipelineInternal.GenerateMarketFeatures)
+			r.Post("/features/news/generate", pipelineInternal.GenerateNewsFeatures)
+			r.Post("/features/snapshots/generate", pipelineInternal.GenerateSnapshots)
+
+			r.Post("/workspaces/{workspace_id}/signals/generate", pipelineInternal.GenerateWorkspaceSignals)
+			r.Post("/workspaces/signals/generate-all", pipelineInternal.GenerateAllWorkspaceSignals)
 		})
 	})
 }
