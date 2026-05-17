@@ -156,7 +156,14 @@ func (h ResearchHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	} else {
-		errs = append(errs, "alpaca credentials not configured")
+		missing := []string{}
+		if h.Alpaca == nil || h.Alpaca.Key == "" {
+			missing = append(missing, "ALPACA_API_KEY")
+		}
+		if h.Alpaca == nil || h.Alpaca.Secret == "" {
+			missing = append(missing, "ALPACA_API_SECRET")
+		}
+		errs = append(errs, "alpaca credentials not configured (set on API container: "+strings.Join(missing, ", ")+")")
 	}
 
 	now := time.Now().UTC()

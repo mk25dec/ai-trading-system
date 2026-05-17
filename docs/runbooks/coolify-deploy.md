@@ -21,6 +21,10 @@ Deploy this repo as a **Docker Compose** resource in Coolify.
 | `ADMIN_EMAIL` | no | `admin@yourdomain.com` |
 | `API_PORT` | no | `8090` (default) |
 | `DUCKDB_PATH` | no | Default `/data/analytics.duckdb` — mount persistent storage on `api` at `/data` |
+| `ALPACA_API_KEY` | yes (Research/market data) | Alpaca **API Key ID** (paper or live) |
+| `ALPACA_API_SECRET` | yes (Research/market data) | Alpaca **Secret Key** |
+| `ALPACA_DATA_FEED` | no | `iex` for free/paper market data (default). Use `sip` only with paid SIP subscription. |
+| `ALPACA_DATA_URL` | no | `https://data.alpaca.markets/v2` |
 
 ## Fix: `network swr70… declared as external, but could not be found`
 
@@ -55,6 +59,22 @@ You should still set `DATABASE_NETWORK_NAME` in env so `docker-compose.yml` atta
 2. Set all environment variables above.
 3. Map your domain to the **web** service (container port **80**). Do not set `ports: 80:80` in compose — Coolify already uses host port 80 for its proxy (`port is already allocated` if you bind it twice). Nginx in `web` proxies `/api` and `/health` to `api`.
 4. Deploy. In **api** logs you want `database target` then `api ready`.
+
+## Alpaca (Research page market data)
+
+The message `alpaca credentials not configured` means the **API** container has empty `ALPACA_API_KEY` and/or `ALPACA_API_SECRET`.
+
+1. In [Alpaca](https://app.alpaca.markets/) → **API Keys** → create or copy **Key ID** and **Secret** (paper is fine for research).
+2. In Coolify → your **Docker Compose** app → **Environment Variables** (not the web service alone — vars must reach the `api` service via compose):
+   ```env
+   ALPACA_API_KEY=PKxxxxxxxx
+   ALPACA_API_SECRET=xxxxxxxx
+   ALPACA_DATA_FEED=iex
+   ```
+3. **Redeploy** the stack (restart is not enough if compose env was never set).
+4. Research → **Refresh data**. Toast should show `N fetched` candles, not this error.
+
+Do **not** put these only in a local `.env` on your laptop unless you run the API locally. Production Coolify needs them in the Coolify UI.
 
 ## DuckDB volume (API app)
 
