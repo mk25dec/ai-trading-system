@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -46,7 +47,8 @@ func (c *FinbertClient) Analyze(ctx context.Context, text string) (label string,
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", 0, 0, fmt.Errorf("finbert status %d", resp.StatusCode)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return "", 0, 0, fmt.Errorf("finbert status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
 	var data finbertAnalyzeResp

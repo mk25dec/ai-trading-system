@@ -67,7 +67,7 @@ func Load() (Config, error) {
 		AdminPassword:   os.Getenv("ADMIN_PASSWORD"),
 		SecureCookies:   secure,
 		InternalAPIKey:  os.Getenv("INTERNAL_API_KEY"),
-		FinbertURL:      stringsTrimSuffix(envOr("FINBERT_URL", envOr("FINBERT_API_URL", ""))), "/"),
+		FinbertURL:      stringsTrimSuffix(envOr("FINBERT_URL", envOr("FINBERT_API_URL", "")), "/"),
 		FinbertAPIKey:   os.Getenv("FINBERT_API_KEY"),
 		AlpacaDataURL:   stringsTrimSuffix(envOr("ALPACA_DATA_URL", "https://data.alpaca.markets/v2"), "/"),
 		AlpacaAPIKey:    os.Getenv("ALPACA_API_KEY"),

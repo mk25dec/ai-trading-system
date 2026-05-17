@@ -250,46 +250,36 @@ func (s *PipelineStore) GetArticleSymbols(ctx context.Context, articleID string)
 	return list, rows.Err()
 }
 
-func (s *PipelineStore) PendingSentiment(ctx context.Context, limit int) ([]struct {
-	Article models.NewsArticle
-	Symbol  string
-}, error) {
+type PendingSentimentRow struct {
+	ArticleID   string
+	Title       string
+	CleanedText string
+	Symbol      string
+}
+
+func (s *PipelineStore) PendingSentiment(ctx context.Context, limit int) ([]PendingSentimentRow, error) {
 	if limit <= 0 {
 		limit = 50
 	}
 	rows, err := s.pool.Query(ctx, `
-		SELECT a.id, a.backlog_id, a.source, a.url, a.canonical_url, a.title, a.published_at, a.discovered_at,
-			a.fetched_at, a.raw_text, a.cleaned_text, a.language, a.text_hash, a.metadata, a.created_at, a.updated_at,
-			s.symbol
+		SELECT a.id, a.title, left(a.cleaned_text, 2000), s.symbol
 		FROM article_symbols s
 		JOIN news_articles a ON a.id = s.article_id
 		LEFT JOIN article_sentiment sent ON sent.article_id = s.article_id AND sent.symbol = s.symbol
-		WHERE sent.article_id IS NULL
+		WHERE sent.article_id IS NULL AND length(trim(a.cleaned_text)) > 0
 		ORDER BY a.created_at ASC LIMIT $1`, limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var list []struct {
-		Article models.NewsArticle
-		Symbol  string
-	}
+	var list []PendingSentimentRow
 	for rows.Next() {
-		var a models.NewsArticle
-		var sym string
-		var meta []byte
-		if err := rows.Scan(
-			&a.ID, &a.BacklogID, &a.Source, &a.URL, &a.CanonicalURL, &a.Title, &a.PublishedAt, &a.DiscoveredAt,
-			&a.FetchedAt, &a.RawText, &a.CleanedText, &a.Language, &a.TextHash, &meta, &a.CreatedAt, &a.UpdatedAt, &sym,
-		); err != nil {
+		var row PendingSentimentRow
+		if err := rows.Scan(&row.ArticleID, &row.Title, &row.CleanedText, &row.Symbol); err != nil {
 			return nil, err
 		}
-		_ = json.Unmarshal(meta, &a.Metadata)
-		list = append(list, struct {
-			Article models.NewsArticle
-			Symbol  string
-		}{Article: a, Symbol: sym})
+		list = append(list, row)
 	}
 	return list, rows.Err()
 }

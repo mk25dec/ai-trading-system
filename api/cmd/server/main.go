@@ -259,6 +259,7 @@ func registerAPIRoutes(r chi.Router, cfg config.Config, pool *pgxpool.Pool) {
 			r.Post("/news/articles/{id}/symbols", pipelineInternal.SetArticleSymbols)
 
 			r.Get("/news/sentiment/pending", pipelineInternal.PendingSentiment)
+			r.Get("/news/sentiment/diagnostics", pipelineInternal.FinbertDiagnostics)
 			r.Post("/news/sentiment/run-batch", pipelineInternal.RunSentimentBatch)
 			r.Post("/news/sentiment/upsert", pipelineInternal.UpsertSentiment)
 

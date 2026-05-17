@@ -258,14 +258,20 @@ func (h PipelineInternalHandler) RunSentimentBatch(w http.ResponseWriter, r *htt
 		return
 	}
 	processed := 0
+	var lastErr string
 	for _, p := range pending {
-		text := services.ExcerptForSentiment(p.Article.Title, p.Article.CleanedText, 1500)
+		text := services.ExcerptForSentiment(p.Title, p.CleanedText, 1500)
+		if strings.TrimSpace(text) == "" {
+			lastErr = "empty text for sentiment"
+			continue
+		}
 		label, score, conf, err := h.Finbert.Analyze(r.Context(), text)
 		if err != nil {
+			lastErr = err.Error()
 			continue
 		}
 		sent := models.ArticleSentiment{
-			ArticleID:      p.Article.ID,
+			ArticleID:      p.ArticleID,
 			Symbol:         p.Symbol,
 			SentimentLabel: label,
 			SentimentScore: score,
@@ -274,11 +280,34 @@ func (h PipelineInternalHandler) RunSentimentBatch(w http.ResponseWriter, r *htt
 			InputMode:      "excerpt",
 		}
 		if err := h.Store.UpsertSentiment(r.Context(), sent); err != nil {
+			lastErr = err.Error()
 			continue
 		}
 		processed++
 	}
-	writeJSON(w, http.StatusOK, map[string]int{"processed": processed})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"processed": processed,
+		"attempted": len(pending),
+		"lastError": lastErr,
+		"finbertUrlConfigured":  h.Cfg.FinbertURL != "",
+		"finbertKeyConfigured": h.Cfg.FinbertAPIKey != "",
+	})
+}
+
+func (h PipelineInternalHandler) FinbertDiagnostics(w http.ResponseWriter, r *http.Request) {
+	_, _, _, err := h.Finbert.Analyze(r.Context(), "Markets rally on strong earnings")
+	out := map[string]any{
+		"finbertUrlConfigured":  h.Cfg.FinbertURL != "",
+		"finbertKeyConfigured": h.Cfg.FinbertAPIKey != "",
+		"finbertUrl":           h.Cfg.FinbertURL,
+	}
+	if err != nil {
+		out["ok"] = false
+		out["error"] = err.Error()
+	} else {
+		out["ok"] = true
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (h PipelineInternalHandler) UpsertSentiment(w http.ResponseWriter, r *http.Request) {
