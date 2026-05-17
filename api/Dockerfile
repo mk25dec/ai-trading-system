@@ -1,12 +1,17 @@
-FROM golang:1.22-alpine AS build
+FROM golang:1.24-bookworm AS build
 WORKDIR /src
-RUN apk add --no-cache git ca-certificates
+RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 COPY . .
-RUN go mod tidy && CGO_ENABLED=0 go build -o /bin/api ./cmd/server
+ENV CGO_ENABLED=1
+RUN go mod tidy && go build -o /bin/api ./cmd/server
 
-FROM alpine:3.20
-RUN apk add --no-cache ca-certificates wget
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates wget libstdc++6 \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /bin/api /app/api
+RUN mkdir -p /data && chown nobody:nogroup /data
+USER nobody
 EXPOSE 8090
 CMD ["/app/api"]

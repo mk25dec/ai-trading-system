@@ -20,7 +20,7 @@ Deploy this repo as a **Docker Compose** resource in Coolify.
 | `SECURE_COOKIES` | yes (HTTPS) | `true` |
 | `ADMIN_EMAIL` | no | `admin@yourdomain.com` |
 | `API_PORT` | no | `8090` (default) |
-| `WEB_HOST_PORT` | no | Host port for direct access, e.g. `http://server-ip:8080` (default `8080`; not `80`) |
+| `DUCKDB_PATH` | no | Default `/data/analytics.duckdb` — mount persistent storage on `api` at `/data` |
 
 ## Fix: `network swr70… declared as external, but could not be found`
 
@@ -56,11 +56,20 @@ You should still set `DATABASE_NETWORK_NAME` in env so `docker-compose.yml` atta
 3. Map your domain to the **web** service (container port **80**). Do not set `ports: 80:80` in compose — Coolify already uses host port 80 for its proxy (`port is already allocated` if you bind it twice). Nginx in `web` proxies `/api` and `/health` to `api`.
 4. Deploy. In **api** logs you want `database target` then `api ready`.
 
+## DuckDB volume (API app)
+
+On the **AI Trading System** compose app in Coolify:
+
+1. **Persistent Storage** → add mount: container `/data` (name e.g. `duckdb_data`).
+2. Optional env: `DUCKDB_PATH=/data/analytics.duckdb` (default if unset).
+
+DuckDB runs **inside the API container** (not a separate service). Back up the volume to preserve analytics.
+
 ## Verify
 
 ```bash
 curl https://your-domain/health
-# {"status":"ok"}  (or "starting" until DB connects)
+# {"status":"ok","postgres":"ok","duckdb":"ok"}  (or "starting" until both are ready)
 ```
 
 ## TLS

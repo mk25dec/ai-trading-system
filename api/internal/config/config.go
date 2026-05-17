@@ -9,6 +9,7 @@ import (
 type Config struct {
 	Port          int
 	DatabaseURL   string
+	DuckDBPath    string
 	JWTSecret     string
 	CORSOrigin    string
 	AdminEmail    string
@@ -43,9 +44,15 @@ func Load() (Config, error) {
 
 	secure := os.Getenv("SECURE_COOKIES") == "true"
 
+	duckPath := os.Getenv("DUCKDB_PATH")
+	if duckPath == "" {
+		duckPath = "/data/analytics.duckdb"
+	}
+
 	return Config{
 		Port:          port,
 		DatabaseURL:   dbURL,
+		DuckDBPath:    duckPath,
 		JWTSecret:     jwtSecret,
 		CORSOrigin:    corsOrigin,
 		AdminEmail:    os.Getenv("ADMIN_EMAIL"),

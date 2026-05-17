@@ -18,12 +18,15 @@ import (
 	"github.com/joeydekruis/ai-trading-system/api/internal/bootstrap"
 	"github.com/joeydekruis/ai-trading-system/api/internal/config"
 	"github.com/joeydekruis/ai-trading-system/api/internal/db"
+	"github.com/joeydekruis/ai-trading-system/api/internal/duckdbstore"
 	"github.com/joeydekruis/ai-trading-system/api/internal/handlers"
 	"github.com/joeydekruis/ai-trading-system/api/internal/httputil"
 	"github.com/joeydekruis/ai-trading-system/api/internal/models"
 	"github.com/joeydekruis/ai-trading-system/api/internal/store"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+var analyticsDB *duckdbstore.Store
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
@@ -35,7 +38,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	var ready atomic.Bool
+	var pgReady atomic.Bool
+	var duckReady atomic.Bool
 
 	apiRouter := chi.NewRouter()
 	apiRouter.Use(middleware.RequestID)
@@ -45,14 +49,24 @@ func main() {
 
 	root := chi.NewRouter()
 	root.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		status := "starting"
-		if ready.Load() {
-			status = "ok"
+		body := map[string]string{
+			"status":   "starting",
+			"postgres": "starting",
+			"duckdb":   "starting",
 		}
-		httputil.WriteJSON(w, http.StatusOK, map[string]string{"status": status})
+		if pgReady.Load() {
+			body["postgres"] = "ok"
+		}
+		if duckReady.Load() {
+			body["duckdb"] = "ok"
+		}
+		if pgReady.Load() && duckReady.Load() {
+			body["status"] = "ok"
+		}
+		httputil.WriteJSON(w, http.StatusOK, body)
 	})
 	root.Mount("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !ready.Load() {
+		if !pgReady.Load() {
 			httputil.WriteError(w, http.StatusServiceUnavailable, "api starting")
 			return
 		}
@@ -70,7 +84,8 @@ func main() {
 		}
 	}()
 
-	go initDatabase(context.Background(), cfg, apiRouter, &ready)
+	go initPostgres(context.Background(), cfg, apiRouter, &pgReady)
+	go initDuckDB(context.Background(), cfg, &duckReady)
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
@@ -81,7 +96,29 @@ func main() {
 	_ = server.Shutdown(shutdownCtx)
 }
 
-func initDatabase(ctx context.Context, cfg config.Config, apiRouter chi.Router, ready *atomic.Bool) {
+func initDuckDB(ctx context.Context, cfg config.Config, ready *atomic.Bool) {
+	const delay = 5 * time.Second
+
+	for attempt := 1; ; attempt++ {
+		store, err := duckdbstore.Open(cfg.DuckDBPath)
+		if err != nil {
+			slog.Error("duckdb open", "attempt", attempt, "path", cfg.DuckDBPath, "err", err)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(delay):
+				continue
+			}
+		}
+
+		analyticsDB = store
+		ready.Store(true)
+		slog.Info("duckdb ready", "path", cfg.DuckDBPath)
+		return
+	}
+}
+
+func initPostgres(ctx context.Context, cfg config.Config, apiRouter chi.Router, ready *atomic.Bool) {
 	const delay = 5 * time.Second
 
 	for attempt := 1; ; attempt++ {
