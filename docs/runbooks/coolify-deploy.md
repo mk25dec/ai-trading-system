@@ -20,7 +20,7 @@ Deploy this repo as a **Docker Compose** resource in Coolify.
 | `SECURE_COOKIES` | yes (HTTPS) | `true` |
 | `ADMIN_EMAIL` | no | `admin@yourdomain.com` |
 | `API_PORT` | no | `8090` (default) |
-| `WEB_PORT` | no | Not used in production compose (`expose` only; Coolify proxies port 80) |
+| `WEB_HOST_PORT` | no | Host port for direct access, e.g. `http://server-ip:8080` (default `8080`; not `80`) |
 
 ## Fix: `network swr70… declared as external, but could not be found`
 

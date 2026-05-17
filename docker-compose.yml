@@ -38,9 +38,12 @@ services:
     depends_on:
       api:
         condition: service_started
-    # Coolify proxy routes to this port — do not bind host :80 (already used by Coolify).
+    # Coolify proxy uses expose :80. Optional host port for http://SERVER_IP:WEB_HOST_PORT
+    # (do not use 80 — Coolify already binds host port 80).
     expose:
       - "80"
+    ports:
+      - "${WEB_HOST_PORT:-8080}:80"
     networks:
       - default
 
