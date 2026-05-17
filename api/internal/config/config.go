@@ -17,7 +17,7 @@ type Config struct {
 }
 
 func Load() (Config, error) {
-	port := 8080
+	port := 8090
 	if v := os.Getenv("API_PORT"); v != "" {
 		p, err := strconv.Atoi(v)
 		if err != nil {

@@ -1,0 +1,13 @@
+# Optional overlay for local full-stack without Coolify Postgres network.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.local.yml up -d
+# Requires a user-defined bridge network that exists on your machine, or create one:
+#   docker network create trading-local
+services:
+  api:
+    networks:
+      - default
+
+networks:
+  database:
+    external: true
+    name: ${DATABASE_NETWORK_NAME:-trading-local}

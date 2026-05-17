@@ -8,5 +8,5 @@ FROM alpine:3.20
 RUN apk add --no-cache ca-certificates wget
 WORKDIR /app
 COPY --from=build /bin/api /app/api
-EXPOSE 8080
+EXPOSE 8090
 CMD ["/app/api"]

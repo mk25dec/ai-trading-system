@@ -56,7 +56,7 @@ Open http://localhost:5173 and sign in with `ADMIN_EMAIL` / `ADMIN_PASSWORD`.
 docker compose --env-file .env up -d --build
 ```
 
-Set `DATABASE_URL` in `.env` (or Coolify env vars) to your Postgres connection string.
+Set `DATABASE_URL` and `DATABASE_NETWORK_NAME` in Coolify (see [coolify-deploy runbook](docs/runbooks/coolify-deploy.md)).
 
 - Dashboard: http://localhost (port `WEB_PORT`, default 80)
 - API health: proxied at `/health`

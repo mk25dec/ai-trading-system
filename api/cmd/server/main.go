@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -18,8 +19,10 @@ import (
 	"github.com/joeydekruis/ai-trading-system/api/internal/config"
 	"github.com/joeydekruis/ai-trading-system/api/internal/db"
 	"github.com/joeydekruis/ai-trading-system/api/internal/handlers"
+	"github.com/joeydekruis/ai-trading-system/api/internal/httputil"
 	"github.com/joeydekruis/ai-trading-system/api/internal/models"
 	"github.com/joeydekruis/ai-trading-system/api/internal/store"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func main() {
@@ -32,22 +35,89 @@ func main() {
 		os.Exit(1)
 	}
 
-	ctx := context.Background()
-	pool, err := db.ConnectWithRetry(ctx, cfg.DatabaseURL, 30, 2*time.Second)
-	if err != nil {
-		slog.Error("database connect", "err", err)
-		os.Exit(1)
-	}
-	defer pool.Close()
+	var ready atomic.Bool
 
-	if err := db.Migrate(ctx, pool); err != nil {
-		slog.Error("migrate", "err", err)
-		os.Exit(1)
-	}
+	apiRouter := chi.NewRouter()
+	apiRouter.Use(middleware.RequestID)
+	apiRouter.Use(middleware.RealIP)
+	apiRouter.Use(middleware.Recoverer)
+	apiRouter.Use(middleware.Timeout(60 * time.Second))
 
+	root := chi.NewRouter()
+	root.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+		status := "starting"
+		if ready.Load() {
+			status = "ok"
+		}
+		httputil.WriteJSON(w, http.StatusOK, map[string]string{"status": status})
+	})
+	root.Mount("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !ready.Load() {
+			httputil.WriteError(w, http.StatusServiceUnavailable, "api starting")
+			return
+		}
+		apiRouter.ServeHTTP(w, r)
+	}))
+
+	addr := fmt.Sprintf(":%d", cfg.Port)
+	server := &http.Server{Addr: addr, Handler: root}
+
+	go func() {
+		slog.Info("api listening", "addr", addr)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error("server", "err", err)
+			os.Exit(1)
+		}
+	}()
+
+	go initDatabase(context.Background(), cfg, apiRouter, &ready)
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+	<-stop
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_ = server.Shutdown(shutdownCtx)
+}
+
+func initDatabase(ctx context.Context, cfg config.Config, apiRouter chi.Router, ready *atomic.Bool) {
+	const delay = 5 * time.Second
+
+	for attempt := 1; ; attempt++ {
+		pool, err := db.ConnectWithRetry(ctx, cfg.DatabaseURL, 30, 2*time.Second)
+		if err != nil {
+			slog.Error("database connect", "attempt", attempt, "err", err)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(delay):
+				continue
+			}
+		}
+
+		if err := db.Migrate(ctx, pool); err != nil {
+			pool.Close()
+			slog.Error("migrate", "attempt", attempt, "err", err)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(delay):
+				continue
+			}
+		}
+
+		registerAPIRoutes(apiRouter, cfg, pool)
+		ready.Store(true)
+		slog.Info("api ready")
+		return
+	}
+}
+
+func registerAPIRoutes(r chi.Router, cfg config.Config, pool *pgxpool.Pool) {
 	users := store.NewUserStore(pool)
 	workspaces := store.NewWorkspaceStore(pool)
-	bootstrap.EnsureAdmin(ctx, users, cfg.AdminEmail, cfg.AdminPassword)
+	bootstrap.EnsureAdmin(context.Background(), users, cfg.AdminEmail, cfg.AdminPassword)
 
 	authHandler := handlers.AuthHandler{Users: users, JWTSecret: cfg.JWTSecret, SecureCookies: cfg.SecureCookies}
 	userHandler := handlers.UserHandler{Users: users}
@@ -57,14 +127,6 @@ func main() {
 	loadUser := func(ctx context.Context, id string) (*models.User, error) {
 		return users.GetByID(ctx, id)
 	}
-
-	r := chi.NewRouter()
-	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
-	r.Use(middleware.Recoverer)
-	r.Use(middleware.Timeout(60 * time.Second))
-
-	r.Get("/health", handlers.HealthHandler{}.ServeHTTP)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(cors.Handler(cors.Options{
@@ -106,25 +168,4 @@ func main() {
 			})
 		})
 	})
-
-	addr := fmt.Sprintf(":%d", cfg.Port)
-	server := &http.Server{Addr: addr, Handler: r}
-
-	go func() {
-		slog.Info("api listening", "addr", addr)
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			slog.Error("server", "err", err)
-			os.Exit(1)
-		}
-	}()
-
-	slog.Info("api ready")
-
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
-	<-stop
-
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	_ = server.Shutdown(shutdownCtx)
 }
