@@ -1,139 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { ChevronDown, ChevronRight, Plus, X } from "lucide-react"
+import { Plus, X } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import { WorkspaceToolbar } from "@/components/workspace-toolbar"
 import { useDataRefresh } from "@/hooks/use-data-refresh"
 import { formatDateTime, useWorkspace } from "@/hooks/use-workspace"
 import { PriceChart } from "@/components/price-chart"
-import { RecommendationBadge } from "@/components/recommendation-badge"
+import { DecisionDetailPanel, TraderOutlookTable } from "@/components/trader-outlook-table"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import {
-  pipelineApi,
-  type RecommendationAction,
-  type ResearchStockRow,
-} from "@/lib/pipeline-api"
-function formatPct(v?: number) {
-  if (v == null || Number.isNaN(v)) return "—"
-  return `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`
-}
-
-function formatNum(v?: number, digits = 2) {
-  if (v == null || Number.isNaN(v)) return "—"
-  return v.toFixed(digits)
-}
-
-function MarketMetrics({ row }: { row: ResearchStockRow }) {
-  const m = row.market
-  return (
-    <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-3">
-      <Metric label="Last" value={row.lastClose != null ? `$${row.lastClose.toFixed(2)}` : "—"} />
-      <Metric label="24h" value={formatPct(m?.priceChange24h)} />
-      <Metric label="5d" value={formatPct(m?.priceChange5d)} />
-      <Metric label="RSI" value={formatNum(m?.rsi, 1)} />
-      <Metric label="Vol ratio" value={m?.volumeRatio != null ? `${m.volumeRatio.toFixed(2)}x` : "—"} />
-      <Metric label="vs SMA20" value={formatPct(m?.distanceSma20)} />
-    </dl>
-  )
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="font-mono font-medium tabular-nums">{value}</dd>
-    </div>
-  )
-}
-
-function StockDetailPanel({ row }: { row: ResearchStockRow }) {
-  return (
-    <div className="grid gap-6 border-t bg-muted/20 p-4 lg:grid-cols-[minmax(0,1fr)_280px_minmax(0,1.2fr)]">
-      <div className="space-y-3">
-        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          Analysis
-        </p>
-        <ul className="space-y-2 text-sm leading-relaxed">
-          {row.bullets.map((b, i) => (
-            <li key={i} className="flex gap-2">
-              <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary" />
-              <span>{b}</span>
-            </li>
-          ))}
-        </ul>
-        {row.headlines.length > 0 && (
-          <div className="space-y-2 pt-2">
-            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              Recent news
-            </p>
-            <ul className="space-y-2">
-              {row.headlines.map((h) => (
-                <li key={h.url} className="text-sm">
-                  <a
-                    href={h.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="font-medium text-primary hover:underline"
-                  >
-                    {h.title}
-                  </a>
-                  {h.sentimentLabel && (
-                    <span className="ml-2 text-xs text-muted-foreground">
-                      FinBERT: {h.sentimentLabel}
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </div>
-      <div>
-        <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          Price (90d)
-        </p>
-        <PriceChart candles={row.candles} />
-      </div>
-      <div>
-        <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          Trading parameters
-        </p>
-        <MarketMetrics row={row} />
-        {row.news && (
-          <dl className="mt-4 grid grid-cols-2 gap-2 text-xs">
-            <Metric
-              label="News 24h"
-              value={String(row.news.newsCount24h)}
-            />
-            <Metric
-              label="Sentiment 24h"
-              value={
-                row.news.avgSentiment24h != null
-                  ? row.news.avgSentiment24h.toFixed(2)
-                  : "—"
-              }
-            />
-          </dl>
-        )}
-        <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground">
-          Score {row.score.toFixed(2)} · confidence {(row.confidence * 100).toFixed(0)}%.
-          Research signal only — not an order.
-        </p>
-      </div>
-    </div>
-  )
-}
+import { resolveDecision, summarizeDecisions } from "@/lib/decision-engine"
+import { sortResearchRows } from "@/lib/feature-metrics"
+import { pipelineApi, type ResearchStockRow } from "@/lib/pipeline-api"
 
 export function ResearchPage() {
   const queryClient = useQueryClient()
@@ -166,20 +46,15 @@ export function ResearchPage() {
     onError: (e: Error) => toast.error(e.message),
   })
 
-  const sortedRows = useMemo(() => {
-    const rows = board.data?.rows ?? []
-    const order: Record<string, number> = {
-      buy_candidate: 0,
-      sell_candidate: 1,
-      watch: 2,
-      avoid: 3,
-    }
-    return [...rows].sort(
-      (a, b) =>
-        (order[a.recommendation] ?? 9) - (order[b.recommendation] ?? 9) ||
-        b.confidence - a.confidence,
-    )
-  }, [board.data?.rows])
+  const sortedRows = useMemo(
+    () => sortResearchRows(board.data?.rows ?? []),
+    [board.data?.rows],
+  )
+
+  const decisionSummary = useMemo(
+    () => summarizeDecisions(sortedRows),
+    [sortedRows],
+  )
 
   function addSymbol() {
     const sym = symbolInput.trim().toUpperCase()
@@ -206,8 +81,8 @@ export function ResearchPage() {
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">Stock research</h1>
           <p className="mt-2 max-w-2xl text-muted-foreground">
-            Manage your watchlist, pull market data for those symbols only, run FinBERT on
-            related news, and view buy / sell / watch / avoid recommendations.
+            Multi-horizon decision engine: composite score, 3D / 1W / 1M outlook, news stance,
+            and risk — expand any row for chart and evidence.
           </p>
         </div>
         <WorkspaceToolbar
@@ -231,21 +106,24 @@ export function ResearchPage() {
           <CardContent className="py-4 text-sm text-amber-950 dark:text-amber-100">
             <p className="font-medium">Market data not loaded</p>
             <p className="mt-1 text-muted-foreground">{board.data.diagnostics.hint}</p>
-            {board.data.diagnostics.alpacaConfigured && (
-              <p className="mt-2 font-mono text-xs text-muted-foreground">
-                Alpaca feed: {board.data.diagnostics.alpacaFeed ?? "iex"} · symbols with candles:{" "}
-                {board.data.diagnostics.symbolsWithCandles}/{board.data.symbols.length}
-              </p>
-            )}
           </CardContent>
         </Card>
+      )}
+
+      {sortedRows.length > 0 && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <SummaryChip label="Aligned bullish" value={String(decisionSummary.alignedBull)} />
+          <SummaryChip label="Aligned bearish" value={String(decisionSummary.alignedBear)} />
+          <SummaryChip label="Conflicts" value={String(decisionSummary.conflict)} />
+          <SummaryChip label="High risk" value={String(decisionSummary.highRisk)} />
+        </div>
       )}
 
       <Card className="border-border/70 shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Your watchlist</CardTitle>
           <CardDescription>
-            Market ingestion and FinBERT analysis run only for symbols you add here.
+            Market ingestion and FinBERT run only for symbols you add here.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3 sm:flex-row">
@@ -285,60 +163,21 @@ export function ResearchPage() {
 
       <Card className="overflow-hidden border-border/70 shadow-sm">
         <CardHeader className="border-b bg-muted/30 pb-3">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <CardTitle className="text-base">Recommendations</CardTitle>
-              <CardDescription>
-                {board.data?.workspaceName
-                  ? `${board.data.workspaceName} · `
-                  : ""}
-                Sorted by signal strength. Expand a row for chart and analysis.
-              </CardDescription>
-            </div>
-            {board.isFetching && (
-              <span className="text-xs text-muted-foreground">Updating…</span>
-            )}
-          </div>
+          <CardTitle className="text-base">Trader outlook</CardTitle>
+          <CardDescription>
+            Statistics-driven signal from technicals, FinBERT news, risk, and horizon alignment.
+            Research only — not an order.
+          </CardDescription>
         </CardHeader>
-        <CardContent className="p-0">
+        <CardContent className="p-0 overflow-x-auto">
           {board.isLoading ? (
             <p className="p-8 text-center text-sm text-muted-foreground">Loading…</p>
-          ) : sortedRows.length === 0 ? (
-            <p className="p-8 text-center text-sm text-muted-foreground">
-              Add symbols and click Refresh data to load market prices and FinBERT news
-              sentiment.
-            </p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-8" />
-                  <TableHead>Symbol</TableHead>
-                  <TableHead>Signal</TableHead>
-                  <TableHead className="text-right">Price</TableHead>
-                  <TableHead className="text-right">24h</TableHead>
-                  <TableHead className="text-right">RSI</TableHead>
-                  <TableHead className="text-right">Volume</TableHead>
-                  <TableHead className="text-right">News 24h</TableHead>
-                  <TableHead className="text-right">Sentiment</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sortedRows.map((row) => {
-                  const open = expanded === row.symbol
-                  return (
-                    <ResearchTableRow
-                      key={row.symbol}
-                      row={row}
-                      open={open}
-                      onToggle={() =>
-                        setExpanded(open ? null : row.symbol)
-                      }
-                    />
-                  )
-                })}
-              </TableBody>
-            </Table>
+            <ResearchOutlookWithDetail
+              rows={sortedRows}
+              expanded={expanded}
+              onToggle={(sym) => setExpanded((s) => (s === sym ? null : sym))}
+            />
           )}
         </CardContent>
       </Card>
@@ -346,66 +185,82 @@ export function ResearchPage() {
   )
 }
 
-function ResearchTableRow({
-  row,
-  open,
+function SummaryChip({ label, value }: { label: string; value: string }) {
+  return (
+    <Card className="border-border/70 shadow-sm">
+      <CardContent className="py-3">
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="mt-0.5 text-xl font-semibold tabular-nums">{value}</p>
+      </CardContent>
+    </Card>
+  )
+}
+
+function ResearchOutlookWithDetail({
+  rows,
+  expanded,
   onToggle,
 }: {
-  row: ResearchStockRow
-  open: boolean
-  onToggle: () => void
+  rows: ResearchStockRow[]
+  expanded: string | null
+  onToggle: (symbol: string) => void
 }) {
-  const rec = row.recommendation as RecommendationAction
+  if (rows.length === 0) {
+    return (
+      <p className="p-8 text-center text-sm text-muted-foreground">
+        Add symbols and click Get latest data to load prices and FinBERT sentiment.
+      </p>
+    )
+  }
+
   return (
-    <>
-      <TableRow
-        className="cursor-pointer hover:bg-muted/40"
-        onClick={onToggle}
-      >
-        <TableCell>
-          {open ? (
-            <ChevronDown className="size-4 text-muted-foreground" />
-          ) : (
-            <ChevronRight className="size-4 text-muted-foreground" />
-          )}
-        </TableCell>
-        <TableCell>
-          <div className="font-mono font-semibold">{row.symbol}</div>
-          <div className="text-xs text-muted-foreground">{row.name}</div>
-        </TableCell>
-        <TableCell>
-          <RecommendationBadge action={rec} />
-        </TableCell>
-        <TableCell className="text-right font-mono tabular-nums">
-          {row.lastClose != null ? row.lastClose.toFixed(2) : "—"}
-        </TableCell>
-        <TableCell className="text-right font-mono tabular-nums">
-          {formatPct(row.market?.priceChange24h)}
-        </TableCell>
-        <TableCell className="text-right font-mono tabular-nums">
-          {formatNum(row.market?.rsi, 1)}
-        </TableCell>
-        <TableCell className="text-right font-mono tabular-nums">
-          {row.market?.volumeRatio != null
-            ? `${row.market.volumeRatio.toFixed(2)}x`
-            : "—"}
-        </TableCell>
-        <TableCell className="text-right font-mono tabular-nums">
-          {row.news?.newsCount24h ?? "—"}
-        </TableCell>
-        <TableCell className="text-right font-mono tabular-nums">
-          {row.news?.avgSentiment24h != null
-            ? row.news.avgSentiment24h.toFixed(2)
-            : "—"}
-        </TableCell>
-      </TableRow>
-      {open && (
-        <TableRow>
-          <TableCell colSpan={9} className="p-0">
-            <StockDetailPanel row={row} />
-          </TableCell>
-        </TableRow>
-      )}
-    </>
+    <TraderOutlookTable
+      rows={rows}
+      expanded={expanded}
+      onToggle={onToggle}
+      renderDetail={(row) => <ResearchRowDetail row={row} />}
+    />
+  )
+}
+
+export function ResearchRowDetail({ row }: { row: ResearchStockRow }) {
+  const decision = resolveDecision(row)
+  return (
+    <DecisionDetailPanel row={row} decision={decision}>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <div>
+          <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            Price (90d)
+          </p>
+          <PriceChart candles={row.candles} />
+        </div>
+        {row.headlines.length > 0 && (
+          <div>
+            <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              Recent news
+            </p>
+            <ul className="space-y-2 text-sm">
+              {row.headlines.map((h) => (
+                <li key={h.url}>
+                  <a
+                    href={h.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-medium text-primary hover:underline"
+                  >
+                    {h.title}
+                  </a>
+                  {h.sentimentLabel && (
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      FinBERT: {h.sentimentLabel}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    </DecisionDetailPanel>
   )
 }

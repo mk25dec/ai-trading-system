@@ -1,8 +1,10 @@
 import { useQuery } from "@tanstack/react-query"
-import { AlertTriangle, ChevronDown, ChevronRight, TrendingDown, TrendingUp } from "lucide-react"
+import { AlertTriangle, TrendingDown, TrendingUp } from "lucide-react"
 import { useMemo, useState } from "react"
 import { WorkspaceToolbar } from "@/components/workspace-toolbar"
+import { TraderOutlookTable, DecisionDetailPanel } from "@/components/trader-outlook-table"
 import { RecommendationBadge } from "@/components/recommendation-badge"
+import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import {
@@ -30,6 +32,7 @@ import {
   summarizeRows,
   type FeatureRow,
 } from "@/lib/feature-metrics"
+import { resolveDecision, summarizeDecisions } from "@/lib/decision-engine"
 import {
   pipelineApi,
   type FinbertMetrics,
@@ -41,6 +44,7 @@ export function FeaturesPage() {
   const { workspaceId, selectWorkspace, workspaces, activeWorkspace } = useWorkspace()
   const { refresh, lastRefreshedAt } = useDataRefresh(workspaceId)
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [showAnalyst, setShowAnalyst] = useState(false)
 
   const board = useQuery({
     queryKey: ["research-board", workspaceId],
@@ -66,6 +70,7 @@ export function FeaturesPage() {
   }, [board.data?.rows, snapshots.data])
 
   const summary = useMemo(() => summarizeRows(rows), [rows])
+  const decisionSummary = useMemo(() => summarizeDecisions(rows), [rows])
 
   return (
     <div className="space-y-6">
@@ -79,7 +84,7 @@ export function FeaturesPage() {
             ) : (
               "your workspace"
             )}{" "}
-            watchlist — use momentum, technicals, and FinBERT sentiment together before acting.
+            watchlist — trader outlook first; expand for evidence or open analyst metrics.
           </p>
         </div>
         <WorkspaceToolbar
@@ -132,20 +137,60 @@ export function FeaturesPage() {
         />
       </div>
 
+      {rows.length > 0 && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <SummaryCard label="Horizons aligned ↑" value={String(decisionSummary.alignedBull)} />
+          <SummaryCard label="Horizons aligned ↓" value={String(decisionSummary.alignedBear)} />
+          <SummaryCard label="Signal conflicts" value={String(decisionSummary.conflict)} />
+          <SummaryCard label="High risk names" value={String(decisionSummary.highRisk)} />
+        </div>
+      )}
+
       <Card className="border-border/70 shadow-sm">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Decision matrix</CardTitle>
+          <CardTitle className="text-base">Trader outlook</CardTitle>
           <CardDescription>
-            Market + news + full FinBERT softmax (P+, P−, P0), label mix, and confidence. Click a row
-            for detail.
+            Composite score, 3D / 1W / 1M horizons, news stance, and risk. Expand for drivers.
           </CardDescription>
         </CardHeader>
+        <CardContent className="overflow-x-auto p-0">
+          <TraderOutlookTable
+            rows={rows}
+            expanded={expanded}
+            onToggle={(sym) => setExpanded((s) => (s === sym ? null : sym))}
+            renderDetail={(row) => <FeaturesAnalystDetail row={row as FeatureRow} />}
+            emptyMessage={
+              workspaceId && !board.isLoading
+                ? "No feature data yet — add watchlist symbols on Research, then Get latest data."
+                : undefined
+            }
+          />
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/70 shadow-sm">
+        <CardHeader className="flex flex-row items-center justify-between gap-4 pb-2">
+          <div>
+            <CardTitle className="text-base">Analyst metrics</CardTitle>
+            <CardDescription>
+              Full FinBERT softmax and market rollups for verification.
+            </CardDescription>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setShowAnalyst((v) => !v)}
+          >
+            {showAnalyst ? "Hide" : "Show"} detailed table
+          </Button>
+        </CardHeader>
+        {showAnalyst && (
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow className="border-b-0 hover:bg-transparent">
-                  <TableHead rowSpan={2} className="w-8 align-bottom" />
                   <TableHead rowSpan={2} className="sticky left-0 z-10 bg-card align-bottom">
                     Symbol
                   </TableHead>
@@ -220,18 +265,11 @@ export function FeaturesPage() {
               </TableHeader>
               <TableBody>
                 {rows.map((row) => (
-                  <FeatureTableRow
-                    key={row.symbol}
-                    row={row}
-                    open={expanded === row.symbol}
-                    onToggle={() =>
-                      setExpanded((s) => (s === row.symbol ? null : row.symbol))
-                    }
-                  />
+                  <FeatureTableRow key={row.symbol} row={row} />
                 ))}
                 {rows.length === 0 && workspaceId && !board.isLoading && (
                   <TableRow>
-                    <TableCell colSpan={37} className="text-center text-muted-foreground">
+                    <TableCell colSpan={36} className="text-center text-muted-foreground">
                       No feature data yet — add watchlist symbols on Research, then Get latest data.
                     </TableCell>
                   </TableRow>
@@ -240,6 +278,7 @@ export function FeaturesPage() {
             </Table>
           </div>
         </CardContent>
+        )}
       </Card>
 
       <Card className="border-border/70 bg-muted/20 shadow-sm">
@@ -248,8 +287,8 @@ export function FeaturesPage() {
         </CardHeader>
         <CardContent className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-3">
           <p>
-            <span className="font-medium text-foreground">Score / Conf.</span> — Rule-based
-            research score and confidence; not an order.
+            <span className="font-medium text-foreground">Trader outlook</span> — Composite 0–100
+            from technicals, FinBERT, risk, and 3D/1W/1M alignment; not an order.
           </p>
           <p>
             <span className="font-medium text-foreground">RSI</span> — &gt;70 overbought, &lt;30
@@ -304,6 +343,46 @@ function SummaryCard({
   )
 }
 
+function FeaturesAnalystDetail({ row }: { row: FeatureRow }) {
+  const decision = resolveDecision(row)
+  return (
+    <DecisionDetailPanel row={row} decision={decision}>
+      <FeatureDetailMetrics row={row} />
+    </DecisionDetailPanel>
+  )
+}
+
+function FeatureDetailMetrics({ row }: { row: FeatureRow }) {
+  const m = row.market
+  const n = row.news
+  const fb = finbertForRow(row)
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <MetricBlock title="Market">
+        <Metric label="24h change" value={formatPct(m?.priceChange24h)} />
+        <Metric label="5d change" value={formatPct(m?.priceChange5d)} />
+        <Metric label="RSI (14)" value={formatNum(m?.rsi, 1)} />
+        <Metric label="Volume ratio" value={m?.volumeRatio != null ? `${m.volumeRatio.toFixed(2)}x` : "—"} />
+        <Metric
+          label="Distance SMA20"
+          value={formatPct(m?.distanceSma20 != null ? m.distanceSma20 * 100 : null)}
+        />
+        <Metric label="Volatility (10d)" value={formatNum(m?.volatility, 3)} />
+      </MetricBlock>
+      <MetricBlock title="News rollups">
+        <Metric label="Articles 1h / 4h / 24h" value={`${n?.newsCount1h ?? 0} / ${n?.newsCount4h ?? 0} / ${n?.newsCount24h ?? 0}`} />
+        <Metric label="Signed sentiment 1h / 24h" value={`${formatSentiment(n?.avgSentiment1h)} / ${formatSentiment(n?.avgSentiment24h)}`} />
+        <Metric label="Momentum (4h−24h)" value={formatSentiment(n?.sentimentMomentum)} />
+        <Metric
+          label="Max relevance 24h"
+          value={n?.maxRelevanceScore24h != null ? n.maxRelevanceScore24h.toFixed(2) : "—"}
+        />
+      </MetricBlock>
+      <FinbertDetailBlocks fb={fb} />
+    </div>
+  )
+}
+
 function finbertForRow(row: FeatureRow): FinbertMetrics | undefined {
   const nested = row.news?.finbert
   if (nested && Object.keys(nested).length > 0) return nested
@@ -311,15 +390,7 @@ function finbertForRow(row: FeatureRow): FinbertMetrics | undefined {
   return snap
 }
 
-function FeatureTableRow({
-  row,
-  open,
-  onToggle,
-}: {
-  row: FeatureRow
-  open: boolean
-  onToggle: () => void
-}) {
+function FeatureTableRow({ row }: { row: FeatureRow }) {
   const m = row.market
   const n = row.news
   const fb = finbertForRow(row)
@@ -327,18 +398,7 @@ function FeatureTableRow({
   const rsiHint = rsiLabel(rsi)
 
   return (
-    <>
-      <TableRow
-        className="cursor-pointer hover:bg-muted/40"
-        onClick={onToggle}
-      >
-        <TableCell>
-          {open ? (
-            <ChevronDown className="size-4 text-muted-foreground" />
-          ) : (
-            <ChevronRight className="size-4 text-muted-foreground" />
-          )}
-        </TableCell>
+      <TableRow className="hover:bg-muted/20">
         <TableCell className="sticky left-0 z-10 bg-card">
           <div className="font-mono font-semibold">{row.symbol}</div>
           <div className="text-xs text-muted-foreground">{row.name}</div>
@@ -420,61 +480,6 @@ function FeatureTableRow({
           {formatDateTime(row.updatedAt ?? row.snapshot?.timestamp)}
         </TableCell>
       </TableRow>
-      {open && (
-        <TableRow>
-          <TableCell colSpan={37} className="bg-muted/20 p-4">
-            <FeatureDetail row={row} />
-          </TableCell>
-        </TableRow>
-      )}
-    </>
-  )
-}
-
-function FeatureDetail({ row }: { row: FeatureRow }) {
-  const m = row.market
-  const n = row.news
-  const fb = finbertForRow(row)
-
-  return (
-    <div className="grid gap-6 lg:grid-cols-2">
-      <div>
-        <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          Analysis
-        </p>
-        <ul className="space-y-2 text-sm leading-relaxed">
-          {row.bullets.map((b, i) => (
-            <li key={i} className="flex gap-2">
-              <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary" />
-              <span>{b}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <MetricBlock title="Market">
-          <Metric label="24h change" value={formatPct(m?.priceChange24h)} />
-          <Metric label="5d change" value={formatPct(m?.priceChange5d)} />
-          <Metric label="RSI (14)" value={formatNum(m?.rsi, 1)} />
-          <Metric label="Volume ratio" value={m?.volumeRatio != null ? `${m.volumeRatio.toFixed(2)}x` : "—"} />
-          <Metric
-            label="Distance SMA20"
-            value={formatPct(m?.distanceSma20 != null ? m.distanceSma20 * 100 : null)}
-          />
-          <Metric label="Volatility (10d)" value={formatNum(m?.volatility, 3)} />
-        </MetricBlock>
-        <MetricBlock title="News rollups">
-          <Metric label="Articles 1h / 4h / 24h" value={`${n?.newsCount1h ?? 0} / ${n?.newsCount4h ?? 0} / ${n?.newsCount24h ?? 0}`} />
-          <Metric label="Signed sentiment 1h / 24h" value={`${formatSentiment(n?.avgSentiment1h)} / ${formatSentiment(n?.avgSentiment24h)}`} />
-          <Metric label="Momentum (4h−24h)" value={formatSentiment(n?.sentimentMomentum)} />
-          <Metric
-            label="Max relevance 24h"
-            value={n?.maxRelevanceScore24h != null ? n.maxRelevanceScore24h.toFixed(2) : "—"}
-          />
-        </MetricBlock>
-        <FinbertDetailBlocks fb={fb} />
-      </div>
-    </div>
   )
 }
 

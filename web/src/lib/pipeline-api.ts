@@ -184,12 +184,53 @@ export type RecommendationAction =
   | "avoid"
   | "watch"
 
+export type OutlookLabel =
+  | "strong_buy"
+  | "buy"
+  | "watch"
+  | "sell"
+  | "avoid"
+
+export interface HorizonOutlook {
+  id: string
+  label: string
+  score: number
+  outlook: OutlookLabel
+  confidence: number
+}
+
+export interface CategoryScore {
+  id: string
+  label: string
+  score: number
+  confidence: number
+  weight: number
+}
+
+export interface DecisionView {
+  primaryAction: RecommendationAction
+  primaryOutlook: string
+  compositeScore: number
+  confidence: number
+  riskLevel: "low" | "medium" | "high" | string
+  alignment: string
+  conflict: boolean
+  conflictNote?: string
+  newsStance: string
+  newsConfidence?: number
+  priceTrend: string
+  drivers: string[]
+  horizons: HorizonOutlook[]
+  categories?: CategoryScore[]
+}
+
 export interface ResearchStockRow {
   symbol: string
   name: string
   recommendation: RecommendationAction
   confidence: number
   score: number
+  decision?: DecisionView
   bullets: string[]
   lastClose?: number
   market?: MarketFeatures

@@ -16,6 +16,7 @@ type ResearchStockRow struct {
 	Recommendation string            `json:"recommendation"`
 	Confidence     float64           `json:"confidence"`
 	Score          float64           `json:"score"`
+	Decision       *DecisionView     `json:"decision,omitempty"`
 	Bullets        []string          `json:"bullets"`
 	LastClose      *float64          `json:"lastClose,omitempty"`
 	Market         *MarketFeatures   `json:"market,omitempty"`

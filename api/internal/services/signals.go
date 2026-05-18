@@ -2,7 +2,6 @@ package services
 
 import (
 	"fmt"
-	"math"
 
 	"github.com/joeydekruis/ai-trading-system/api/internal/models"
 )
@@ -16,84 +15,7 @@ type Recommendation struct {
 }
 
 func ComputeRecommendation(symbol string, mf *models.MarketFeatures, nf *models.NewsFeatures) Recommendation {
-	score := 0.0
-	reasons := []map[string]any{}
-	action := "watch"
-
-	if mf != nil && mf.PriceChange24h != nil {
-		ch := *mf.PriceChange24h
-		if ch > 2 {
-			score += 1
-			reasons = append(reasons, map[string]any{"type": "momentum_24h", "value": ch})
-		} else if ch < -2 {
-			score -= 0.75
-			reasons = append(reasons, map[string]any{"type": "weak_price_24h", "value": ch})
-		}
-		if mf.RSI != nil {
-			rsi := *mf.RSI
-			if rsi > 70 {
-				score -= 0.25
-				reasons = append(reasons, map[string]any{"type": "rsi_overbought", "value": rsi})
-			} else if rsi < 30 {
-				score += 0.25
-				reasons = append(reasons, map[string]any{"type": "rsi_oversold", "value": rsi})
-			}
-		}
-		if mf.VolumeRatio != nil && *mf.VolumeRatio > 1.5 {
-			score += 0.25
-			reasons = append(reasons, map[string]any{"type": "volume_surge", "value": *mf.VolumeRatio})
-		}
-	}
-
-	if nf != nil {
-		if nf.AvgSentiment24h != nil {
-			s := *nf.AvgSentiment24h
-			if s > 0.25 {
-				score += 0.75
-				reasons = append(reasons, map[string]any{"type": "positive_sentiment_24h", "value": s})
-			} else if s < -0.4 {
-				score -= 1.25
-				reasons = append(reasons, map[string]any{"type": "negative_sentiment_24h", "value": s})
-			}
-		}
-		if nf.PositiveNewsSpike {
-			score += 0.5
-			reasons = append(reasons, map[string]any{"type": "positive_news_spike"})
-		}
-		if nf.NegativeNewsSpike {
-			score -= 0.75
-			reasons = append(reasons, map[string]any{"type": "negative_news_spike"})
-		}
-	}
-
-	switch {
-	case score >= 1.25:
-		action = "buy_candidate"
-	case score <= -1.25:
-		action = "avoid"
-	case score <= -0.5 && mf != nil && mf.PriceChange24h != nil && *mf.PriceChange24h < -1:
-		action = "sell_candidate"
-	default:
-		action = "watch"
-	}
-
-	conf := 0.45 + math.Min(math.Abs(score)*0.12, 0.45)
-	conf = math.Round(conf*1000) / 1000
-	if conf > 0.95 {
-		conf = 0.95
-	}
-	if conf < 0.15 {
-		conf = 0.15
-	}
-
-	bullets := BuildAnalysisBullets(symbol, action, mf, nf)
-	return Recommendation{
-		Action:     action,
-		Score:      math.Round(score*100) / 100,
-		Confidence: conf,
-		Reasons:    reasons,
-		Bullets:    bullets,
-	}
+	return RecommendationFromDecision(symbol, mf, nf)
 }
 
 func BuildAnalysisBullets(symbol, action string, mf *models.MarketFeatures, nf *models.NewsFeatures) []string {

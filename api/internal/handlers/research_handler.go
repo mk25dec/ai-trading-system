@@ -218,7 +218,8 @@ func (h ResearchHandler) buildRow(ctx context.Context, symbol string, stored mod
 		candles[i], candles[j] = candles[j], candles[i]
 	}
 
-	rec := services.ComputeRecommendation(symbol, mf, nf)
+	decision := services.ComputeDecision(symbol, mf, nf)
+	rec := services.RecommendationFromDecision(symbol, mf, nf)
 	var lastClose *float64
 	if len(candles) > 0 {
 		c := candles[len(candles)-1].Close
@@ -246,6 +247,7 @@ func (h ResearchHandler) buildRow(ctx context.Context, symbol string, stored mod
 		Recommendation: rec.Action,
 		Confidence:     rec.Confidence,
 		Score:          rec.Score,
+		Decision:       &decision,
 		Bullets:        rec.Bullets,
 		LastClose:      lastClose,
 		Market:         mf,

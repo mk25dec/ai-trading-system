@@ -1,3 +1,4 @@
+import { resolveDecision } from "@/lib/decision-engine"
 import type { RecommendationAction, ResearchStockRow, SymbolFeatureSnapshot } from "@/lib/pipeline-api"
 
 export function formatPct(v?: number | null) {
@@ -76,12 +77,15 @@ const recOrder: Record<RecommendationAction, number> = {
 }
 
 export function sortResearchRows(rows: ResearchStockRow[]) {
-  return [...rows].sort(
-    (a, b) =>
+  return [...rows].sort((a, b) => {
+    const da = resolveDecision(a)
+    const db = resolveDecision(b)
+    return (
       (recOrder[a.recommendation] ?? 9) - (recOrder[b.recommendation] ?? 9) ||
-      b.confidence - a.confidence ||
-      b.score - a.score,
-  )
+      db.compositeScore - da.compositeScore ||
+      b.confidence - a.confidence
+    )
+  })
 }
 
 export function snapshotBySymbol(snapshots: SymbolFeatureSnapshot[]) {
