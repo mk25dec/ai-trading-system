@@ -43,6 +43,8 @@ export interface ArticleWithDetails {
   url: string
   title: string
   publishedAt?: string
+  discoveredAt?: string
+  fetchedAt?: string
   cleanedText: string
   symbols?: ArticleSymbol[]
   sentiment?: ArticleSentiment[]
@@ -64,6 +66,7 @@ export interface SymbolMarketStatus {
   name: string
   isActive: boolean
   latestCandleAt?: string
+  dataFetchedAt?: string
   lastClose?: number
 }
 
@@ -180,11 +183,18 @@ export interface ResearchRefreshResult {
 
 export const pipelineApi = {
   workflowRuns: () => api.get<WorkflowRun[]>("/api/v1/workflows/runs"),
-  newsBacklog: (status?: string) =>
-    api.get<NewsBacklogItem[]>(`/api/v1/news/backlog${status ? `?status=${status}` : ""}`),
-  newsArticles: () => api.get<ArticleWithDetails[]>("/api/v1/news/articles"),
-  symbols: () => api.get<SymbolMarketStatus[]>("/api/v1/symbols"),
-  snapshots: () => api.get<SymbolFeatureSnapshot[]>("/api/v1/symbols/snapshots/latest"),
+  newsBacklog: (workspaceId: string, status?: string) =>
+    api.get<NewsBacklogItem[]>(
+      `/api/v1/workspaces/${workspaceId}/news/backlog${status ? `?status=${status}` : ""}`,
+    ),
+  newsArticles: (workspaceId: string) =>
+    api.get<ArticleWithDetails[]>(`/api/v1/workspaces/${workspaceId}/news/articles`),
+  symbols: (workspaceId: string) =>
+    api.get<SymbolMarketStatus[]>(`/api/v1/workspaces/${workspaceId}/symbols`),
+  snapshots: (workspaceId: string) =>
+    api.get<SymbolFeatureSnapshot[]>(
+      `/api/v1/workspaces/${workspaceId}/symbols/snapshots/latest`,
+    ),
   workspaceSignals: (workspaceId: string) =>
     api.get<WorkspaceSignal[]>(`/api/v1/workspaces/${workspaceId}/signals`),
   watchlist: (workspaceId: string) =>

@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/joeydekruis/ai-trading-system/api/internal/middleware"
@@ -183,4 +185,111 @@ func (h PipelinePublicHandler) canAccessWorkspace(r *http.Request, workspaceID s
 	}
 	_, ok, err := h.Workspaces.GetMemberRole(r.Context(), workspaceID, user.ID)
 	return err == nil && ok
+}
+
+func (h PipelinePublicHandler) activeWatchlistSymbols(ctx context.Context, workspaceID string) ([]string, error) {
+	watchlist, err := h.Store.Watchlist(ctx, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	symbols := make([]string, 0, len(watchlist))
+	for _, e := range watchlist {
+		if e.IsActive {
+			symbols = append(symbols, strings.ToUpper(e.Symbol))
+		}
+	}
+	return symbols, nil
+}
+
+func (h PipelinePublicHandler) ListWorkspaceBacklog(w http.ResponseWriter, r *http.Request) {
+	workspaceID := chi.URLParam(r, "id")
+	user := middleware.UserFromContext(r.Context())
+	if !h.canAccessWorkspace(r, workspaceID, user) {
+		WriteError(w, http.StatusForbidden, "access denied")
+		return
+	}
+	symbols, err := h.activeWatchlistSymbols(r.Context(), workspaceID)
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "watchlist failed")
+		return
+	}
+	status := r.URL.Query().Get("status")
+	items, err := h.Store.ListBacklogForSymbols(r.Context(), symbols, status, 100)
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "query failed")
+		return
+	}
+	if items == nil {
+		items = []models.NewsBacklogItem{}
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+func (h PipelinePublicHandler) ListWorkspaceArticles(w http.ResponseWriter, r *http.Request) {
+	workspaceID := chi.URLParam(r, "id")
+	user := middleware.UserFromContext(r.Context())
+	if !h.canAccessWorkspace(r, workspaceID, user) {
+		WriteError(w, http.StatusForbidden, "access denied")
+		return
+	}
+	symbols, err := h.activeWatchlistSymbols(r.Context(), workspaceID)
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "watchlist failed")
+		return
+	}
+	items, err := h.Store.ListArticlesForSymbols(r.Context(), symbols, 100)
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "query failed")
+		return
+	}
+	if items == nil {
+		items = []models.ArticleWithDetails{}
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+func (h PipelinePublicHandler) ListWorkspaceSymbols(w http.ResponseWriter, r *http.Request) {
+	workspaceID := chi.URLParam(r, "id")
+	user := middleware.UserFromContext(r.Context())
+	if !h.canAccessWorkspace(r, workspaceID, user) {
+		WriteError(w, http.StatusForbidden, "access denied")
+		return
+	}
+	symbols, err := h.activeWatchlistSymbols(r.Context(), workspaceID)
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "watchlist failed")
+		return
+	}
+	items, err := h.Store.ListSymbolsWithMarketStatusForSymbols(r.Context(), symbols)
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "query failed")
+		return
+	}
+	if items == nil {
+		items = []map[string]any{}
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+func (h PipelinePublicHandler) LatestWorkspaceSnapshots(w http.ResponseWriter, r *http.Request) {
+	workspaceID := chi.URLParam(r, "id")
+	user := middleware.UserFromContext(r.Context())
+	if !h.canAccessWorkspace(r, workspaceID, user) {
+		WriteError(w, http.StatusForbidden, "access denied")
+		return
+	}
+	symbols, err := h.activeWatchlistSymbols(r.Context(), workspaceID)
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "watchlist failed")
+		return
+	}
+	snaps, err := h.Store.LatestSnapshotsForSymbols(r.Context(), symbols)
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "query failed")
+		return
+	}
+	if snaps == nil {
+		snaps = []models.SymbolFeatureSnapshot{}
+	}
+	writeJSON(w, http.StatusOK, snaps)
 }

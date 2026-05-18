@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 import { Activity, AlertTriangle, CheckCircle2 } from "lucide-react"
+import { WorkspaceToolbar } from "@/components/workspace-toolbar"
 import { pipelineApi } from "@/lib/pipeline-api"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -11,11 +12,23 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { useDataRefresh } from "@/hooks/use-data-refresh"
+import { formatDateTime, useWorkspace } from "@/hooks/use-workspace"
 
 export function DataHealthPage() {
+  const { workspaceId, selectWorkspace, workspaces, activeWorkspace } = useWorkspace()
+  const { refresh, lastRefreshedAt } = useDataRefresh(workspaceId)
+
   const runs = useQuery({
     queryKey: ["workflow-runs"],
     queryFn: pipelineApi.workflowRuns,
+    refetchInterval: 60_000,
+  })
+
+  const symbols = useQuery({
+    queryKey: ["symbols", workspaceId],
+    queryFn: () => pipelineApi.symbols(workspaceId),
+    enabled: !!workspaceId,
     refetchInterval: 60_000,
   })
 
@@ -32,18 +45,81 @@ export function DataHealthPage() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-3xl font-semibold tracking-tight">Data health</h1>
-        <p className="mt-2 text-muted-foreground">
-          Workflow run history, freshness, and ingestion errors
-        </p>
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight">Data health</h1>
+          <p className="mt-2 text-muted-foreground">
+            Ingestion workflows and watchlist freshness for{" "}
+            {activeWorkspace ? (
+              <span className="font-medium text-foreground">{activeWorkspace.name}</span>
+            ) : (
+              "your workspace"
+            )}
+          </p>
+        </div>
+        <WorkspaceToolbar
+          workspaceId={workspaceId}
+          workspaces={workspaces}
+          onWorkspaceChange={selectWorkspace}
+          onRefresh={() => refresh.mutate()}
+          isRefreshing={refresh.isPending}
+          lastRefreshedAt={lastRefreshedAt}
+        />
       </header>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Stat title="Successful runs" value={success} icon={CheckCircle2} />
         <Stat title="Failed runs" value={failed} icon={AlertTriangle} tone={failed > 0 ? "warn" : "ok"} />
-        <Stat title="Workflows tracked" value={latestByName.size} icon={Activity} />
+        <Stat title="Watchlist symbols" value={(symbols.data ?? []).length} icon={Activity} />
       </div>
+
+      <Card className="border-border/70 shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-base">Watchlist market freshness</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Symbol</TableHead>
+                <TableHead>Latest bar</TableHead>
+                <TableHead>Data fetched at</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {(symbols.data ?? []).map((row) => {
+                const stale =
+                  !row.latestCandleAt ||
+                  Date.now() - new Date(row.latestCandleAt).getTime() > 3 * 24 * 3600 * 1000
+                return (
+                  <TableRow key={row.symbol}>
+                    <TableCell className="font-mono font-medium">{row.symbol}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {formatDateTime(row.latestCandleAt)}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {formatDateTime(row.dataFetchedAt)}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={stale ? "destructive" : "default"}>
+                        {stale ? "stale" : "ok"}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+              {(symbols.data ?? []).length === 0 && workspaceId && (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center text-muted-foreground">
+                    No watchlist symbols to monitor.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
 
       <Card className="border-border/70 shadow-sm">
         <CardHeader>
@@ -69,7 +145,7 @@ export function DataHealthPage() {
                     <StatusBadge status={run.status} />
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {new Date(run.startedAt).toLocaleString()}
+                    {formatDateTime(run.startedAt)}
                   </TableCell>
                   <TableCell>{run.itemsProcessed}</TableCell>
                   <TableCell>{run.durationMs != null ? `${run.durationMs}ms` : "—"}</TableCell>
@@ -112,7 +188,7 @@ export function DataHealthPage() {
                     <StatusBadge status={run.status} />
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {new Date(run.startedAt).toLocaleString()}
+                    {formatDateTime(run.startedAt)}
                   </TableCell>
                   <TableCell>{run.itemsProcessed}</TableCell>
                 </TableRow>

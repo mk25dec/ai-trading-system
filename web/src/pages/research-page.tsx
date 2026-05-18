@@ -1,20 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { ChevronDown, ChevronRight, Plus, RefreshCw, X } from "lucide-react"
+import { ChevronDown, ChevronRight, Plus, X } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
+import { WorkspaceToolbar } from "@/components/workspace-toolbar"
+import { useDataRefresh } from "@/hooks/use-data-refresh"
+import { formatDateTime, useWorkspace } from "@/hooks/use-workspace"
 import { PriceChart } from "@/components/price-chart"
 import { RecommendationBadge } from "@/components/recommendation-badge"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import {
   Table,
   TableBody,
@@ -23,16 +19,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { api, type WorkspaceWithRole } from "@/lib/api"
 import {
   pipelineApi,
   type RecommendationAction,
   type ResearchStockRow,
 } from "@/lib/pipeline-api"
-import { cn } from "@/lib/utils"
-
-const WORKSPACE_KEY = "research-workspace-id"
-
 function formatPct(v?: number) {
   if (v == null || Number.isNaN(v)) return "—"
   return `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`
@@ -146,25 +137,11 @@ function StockDetailPanel({ row }: { row: ResearchStockRow }) {
 
 export function ResearchPage() {
   const queryClient = useQueryClient()
-  const [workspaceId, setWorkspaceId] = useState<string>(() =>
-    localStorage.getItem(WORKSPACE_KEY) ?? "",
-  )
+  const { workspaceId, selectWorkspace, workspaces } = useWorkspace()
+  const { refresh, lastRefreshedAt } = useDataRefresh(workspaceId)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [symbolInput, setSymbolInput] = useState("")
   const [draftSymbols, setDraftSymbols] = useState<string[]>([])
-
-  const workspaces = useQuery({
-    queryKey: ["workspaces"],
-    queryFn: () => api.get<WorkspaceWithRole[]>("/api/v1/workspaces"),
-  })
-
-  useEffect(() => {
-    if (!workspaceId && workspaces.data?.length) {
-      const id = workspaces.data[0].id
-      setWorkspaceId(id)
-      localStorage.setItem(WORKSPACE_KEY, id)
-    }
-  }, [workspaceId, workspaces.data])
 
   const board = useQuery({
     queryKey: ["research-board", workspaceId],
@@ -185,28 +162,6 @@ export function ResearchPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["research-board", workspaceId] })
       toast.success("Watchlist updated")
-    },
-    onError: (e: Error) => toast.error(e.message),
-  })
-
-  const refresh = useMutation({
-    mutationFn: () => pipelineApi.refreshResearch(workspaceId),
-    onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ["research-board", workspaceId] })
-      const parts = [
-        `${result.symbolsProcessed} symbols`,
-        `${result.candlesFetched} fetched`,
-        `${result.candlesInserted} candles stored`,
-        `${result.sentimentProcessed} FinBERT runs`,
-        `${result.signalsGenerated} signals`,
-      ]
-      if (result.errors?.length) {
-        toast.error(result.errors.join("; "))
-      } else if (result.candlesFetched === 0) {
-        toast.error("No market bars returned from Alpaca — check API keys and ALPACA_DATA_FEED=iex")
-      } else {
-        toast.success(`Refresh complete: ${parts.join(" · ")}`)
-      }
     },
     onError: (e: Error) => toast.error(e.message),
   })
@@ -255,40 +210,21 @@ export function ResearchPage() {
             related news, and view buy / sell / watch / avoid recommendations.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {workspaces.data && workspaces.data.length > 1 && (
-            <Select
-              value={workspaceId}
-              onValueChange={(v) => {
-                if (!v) return
-                setWorkspaceId(v)
-                localStorage.setItem(WORKSPACE_KEY, v)
-              }}
-            >
-              <SelectTrigger className="w-[200px]">
-                <SelectValue placeholder="Workspace" />
-              </SelectTrigger>
-              <SelectContent>
-                {workspaces.data.map((ws) => (
-                  <SelectItem key={ws.id} value={ws.id}>
-                    {ws.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          <Button
-            variant="outline"
-            disabled={!workspaceId || refresh.isPending}
-            onClick={() => refresh.mutate()}
-          >
-            <RefreshCw
-              className={cn("size-4", refresh.isPending && "animate-spin")}
-            />
-            Refresh data
-          </Button>
-        </div>
+        <WorkspaceToolbar
+          workspaceId={workspaceId}
+          workspaces={workspaces}
+          onWorkspaceChange={selectWorkspace}
+          onRefresh={() => refresh.mutate()}
+          isRefreshing={refresh.isPending}
+          lastRefreshedAt={lastRefreshedAt ?? board.data?.refreshedAt ?? null}
+        />
       </header>
+
+      {board.data?.refreshedAt && (
+        <p className="text-xs text-muted-foreground">
+          Board data as of {formatDateTime(board.data.refreshedAt)}
+        </p>
+      )}
 
       {board.data?.diagnostics?.hint && (
         <Card className="border-amber-500/40 bg-amber-500/5 shadow-sm">

@@ -107,13 +107,8 @@ func researchHint(d models.ResearchDiagnostics, symbolCount int) string {
 func (h ResearchHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	workspaceID := chi.URLParam(r, "id")
 	user := middleware.UserFromContext(r.Context())
-	role, ok, err := h.Workspaces.GetMemberRole(r.Context(), workspaceID, user.ID)
-	if err != nil || (!ok && user.PlatformRole != models.PlatformRoleAdmin) {
+	if !h.canAccessWorkspace(r, workspaceID, user) {
 		WriteError(w, http.StatusForbidden, "access denied")
-		return
-	}
-	if ok && !store.CanManageWorkspace(role) && user.PlatformRole != models.PlatformRoleAdmin {
-		WriteError(w, http.StatusForbidden, "admin required")
 		return
 	}
 

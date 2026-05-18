@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query"
-import { pipelineApi } from "@/lib/pipeline-api"
+import { WorkspaceToolbar } from "@/components/workspace-toolbar"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import {
@@ -10,21 +10,44 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { useDataRefresh } from "@/hooks/use-data-refresh"
+import { formatDateTime, useWorkspace } from "@/hooks/use-workspace"
+import { pipelineApi } from "@/lib/pipeline-api"
 
 export function SymbolsPage() {
+  const { workspaceId, selectWorkspace, workspaces, activeWorkspace } = useWorkspace()
+  const { refresh, lastRefreshedAt } = useDataRefresh(workspaceId)
+
   const symbols = useQuery({
-    queryKey: ["symbols"],
-    queryFn: pipelineApi.symbols,
+    queryKey: ["symbols", workspaceId],
+    queryFn: () => pipelineApi.symbols(workspaceId),
+    enabled: !!workspaceId,
     refetchInterval: 120_000,
   })
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-3xl font-semibold tracking-tight">Market data</h1>
-        <p className="mt-2 text-muted-foreground">
-          Active symbol universe and latest candle freshness from Alpaca ingestion
-        </p>
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight">Market data</h1>
+          <p className="mt-2 text-muted-foreground">
+            Watchlist symbols for{" "}
+            {activeWorkspace ? (
+              <span className="font-medium text-foreground">{activeWorkspace.name}</span>
+            ) : (
+              "your workspace"
+            )}{" "}
+            — candle freshness from Alpaca ingestion
+          </p>
+        </div>
+        <WorkspaceToolbar
+          workspaceId={workspaceId}
+          workspaces={workspaces}
+          onWorkspaceChange={selectWorkspace}
+          onRefresh={() => refresh.mutate()}
+          isRefreshing={refresh.isPending}
+          lastRefreshedAt={lastRefreshedAt}
+        />
       </header>
 
       <Card className="border-border/70 shadow-sm">
@@ -35,7 +58,8 @@ export function SymbolsPage() {
                 <TableHead>Symbol</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Last close</TableHead>
-                <TableHead>Latest candle</TableHead>
+                <TableHead>Latest bar</TableHead>
+                <TableHead>Data fetched at</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
@@ -52,9 +76,10 @@ export function SymbolsPage() {
                       {row.lastClose != null ? row.lastClose.toFixed(2) : "—"}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
-                      {row.latestCandleAt
-                        ? new Date(row.latestCandleAt).toLocaleString()
-                        : "No data"}
+                      {formatDateTime(row.latestCandleAt)}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {formatDateTime(row.dataFetchedAt)}
                     </TableCell>
                     <TableCell>
                       <Badge variant={stale ? "destructive" : "default"}>
@@ -64,6 +89,13 @@ export function SymbolsPage() {
                   </TableRow>
                 )
               })}
+              {(symbols.data ?? []).length === 0 && workspaceId && (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center text-muted-foreground">
+                    No watchlist symbols — add symbols on Research, then click Get latest data.
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </CardContent>

@@ -180,6 +180,80 @@ func (s *PipelineStore) ListArticles(ctx context.Context, limit int) ([]models.A
 	return articles, nil
 }
 
+func (s *PipelineStore) ListBacklogForSymbols(ctx context.Context, symbols []string, status string, limit int) ([]models.NewsBacklogItem, error) {
+	if len(symbols) == 0 {
+		return []models.NewsBacklogItem{}, nil
+	}
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	q := `SELECT id, source, url, canonical_url, title, published_at, discovered_at, raw_symbol_guess, status, error_message, metadata, created_at, updated_at
+		FROM news_backlog b
+		WHERE EXISTS (
+			SELECT 1 FROM jsonb_array_elements_text(COALESCE(b.raw_symbol_guess, '[]'::jsonb)) AS elem
+			WHERE upper(elem) = ANY($2)
+		)`
+	args := []any{limit, symbols}
+	if status != "" {
+		q += ` AND status = $3`
+		args = []any{limit, symbols, status}
+	}
+	q += ` ORDER BY discovered_at DESC LIMIT $1`
+
+	rows, err := s.pool.Query(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanBacklogRows(rows)
+}
+
+func (s *PipelineStore) ListArticlesForSymbols(ctx context.Context, symbols []string, limit int) ([]models.ArticleWithDetails, error) {
+	if len(symbols) == 0 {
+		return []models.ArticleWithDetails{}, nil
+	}
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT a.id, a.backlog_id, a.source, a.url, a.canonical_url, a.title, a.published_at, a.discovered_at, a.fetched_at,
+			a.raw_text, a.cleaned_text, a.language, a.text_hash, a.metadata, a.created_at, a.updated_at
+		FROM news_articles a
+		WHERE EXISTS (
+			SELECT 1 FROM article_symbols s WHERE s.article_id = a.id AND s.symbol = ANY($2)
+		)
+		ORDER BY a.published_at DESC NULLS LAST, a.created_at DESC LIMIT $1`, limit, symbols)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var articles []models.ArticleWithDetails
+	for rows.Next() {
+		var a models.ArticleWithDetails
+		var meta []byte
+		if err := rows.Scan(
+			&a.ID, &a.BacklogID, &a.Source, &a.URL, &a.CanonicalURL, &a.Title, &a.PublishedAt, &a.DiscoveredAt,
+			&a.FetchedAt, &a.RawText, &a.CleanedText, &a.Language, &a.TextHash, &meta, &a.CreatedAt, &a.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		_ = json.Unmarshal(meta, &a.Metadata)
+		articles = append(articles, a)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	for i := range articles {
+		syms, _ := s.GetArticleSymbols(ctx, articles[i].ID)
+		sent, _ := s.GetArticleSentiment(ctx, articles[i].ID)
+		articles[i].Symbols = syms
+		articles[i].Sentiment = sent
+	}
+	return articles, nil
+}
+
 func (s *PipelineStore) UnmappedArticles(ctx context.Context, limit int) ([]models.NewsArticle, error) {
 	if limit <= 0 {
 		limit = 50
@@ -363,28 +437,53 @@ func (s *PipelineStore) UpsertCandles(ctx context.Context, candles []models.Mark
 	return inserted, nil
 }
 
+func (s *PipelineStore) ListSymbolsWithMarketStatusForSymbols(ctx context.Context, symbols []string) ([]map[string]any, error) {
+	if len(symbols) == 0 {
+		return []map[string]any{}, nil
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT s.symbol, s.name, s.is_active,
+			(SELECT max(ts) FROM market_candles c WHERE c.symbol = s.symbol AND c.timeframe = '1Day') AS latest_candle,
+			(SELECT max(created_at) FROM market_candles c WHERE c.symbol = s.symbol AND c.timeframe = '1Day') AS data_fetched_at,
+			(SELECT close FROM market_candles c WHERE c.symbol = s.symbol AND c.timeframe = '1Day' ORDER BY ts DESC LIMIT 1) AS last_close
+		FROM symbols s WHERE s.symbol = ANY($1) AND s.is_active ORDER BY s.symbol`, symbols)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanSymbolMarketStatus(rows)
+}
+
 func (s *PipelineStore) ListSymbolsWithMarketStatus(ctx context.Context) ([]map[string]any, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT s.symbol, s.name, s.is_active,
 			(SELECT max(ts) FROM market_candles c WHERE c.symbol = s.symbol AND c.timeframe = '1Day') AS latest_candle,
+			(SELECT max(created_at) FROM market_candles c WHERE c.symbol = s.symbol AND c.timeframe = '1Day') AS data_fetched_at,
 			(SELECT close FROM market_candles c WHERE c.symbol = s.symbol AND c.timeframe = '1Day' ORDER BY ts DESC LIMIT 1) AS last_close
 		FROM symbols s WHERE s.is_active ORDER BY s.symbol`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
+	return scanSymbolMarketStatus(rows)
+}
+
+func scanSymbolMarketStatus(rows pgx.Rows) ([]map[string]any, error) {
 	var list []map[string]any
 	for rows.Next() {
 		var sym, name string
 		var active bool
-		var latest *time.Time
+		var latest, fetchedAt *time.Time
 		var lastClose *float64
-		if err := rows.Scan(&sym, &name, &active, &latest, &lastClose); err != nil {
+		if err := rows.Scan(&sym, &name, &active, &latest, &fetchedAt, &lastClose); err != nil {
 			return nil, err
 		}
 		row := map[string]any{"symbol": sym, "name": name, "isActive": active}
 		if latest != nil {
 			row["latestCandleAt"] = latest
+		}
+		if fetchedAt != nil {
+			row["dataFetchedAt"] = fetchedAt
 		}
 		if lastClose != nil {
 			row["lastClose"] = *lastClose
@@ -459,6 +558,22 @@ func (s *PipelineStore) LatestSnapshots(ctx context.Context) ([]models.SymbolFea
 	rows, err := s.pool.Query(ctx, `
 		SELECT DISTINCT ON (symbol) symbol, ts, market_features, news_features, combined_score, data_quality_score, missing_fields, created_at
 		FROM symbol_feature_snapshots ORDER BY symbol, ts DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanSnapshots(rows)
+}
+
+func (s *PipelineStore) LatestSnapshotsForSymbols(ctx context.Context, symbols []string) ([]models.SymbolFeatureSnapshot, error) {
+	if len(symbols) == 0 {
+		return []models.SymbolFeatureSnapshot{}, nil
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT DISTINCT ON (symbol) symbol, ts, market_features, news_features, combined_score, data_quality_score, missing_fields, created_at
+		FROM symbol_feature_snapshots
+		WHERE symbol = ANY($1)
+		ORDER BY symbol, ts DESC`, symbols)
 	if err != nil {
 		return nil, err
 	}
@@ -641,9 +756,15 @@ func (s *PipelineStore) ListSignals(ctx context.Context, workspaceID string, lim
 		limit = 100
 	}
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, workspace_id, symbol, ts, action, direction, score, confidence, reasons,
-			source_snapshot_timestamp, expires_at, status, created_at
-		FROM workspace_signals WHERE workspace_id = $1 ORDER BY ts DESC LIMIT $2`, workspaceID, limit)
+		SELECT ws.id, ws.workspace_id, ws.symbol, ws.ts, ws.action, ws.direction, ws.score, ws.confidence, ws.reasons,
+			ws.source_snapshot_timestamp, ws.expires_at, ws.status, ws.created_at
+		FROM workspace_signals ws
+		WHERE ws.workspace_id = $1
+		  AND EXISTS (
+		    SELECT 1 FROM workspace_watchlists w
+		    WHERE w.workspace_id = $1 AND w.symbol = ws.symbol AND w.is_active
+		  )
+		ORDER BY ws.ts DESC LIMIT $2`, workspaceID, limit)
 	if err != nil {
 		return nil, err
 	}

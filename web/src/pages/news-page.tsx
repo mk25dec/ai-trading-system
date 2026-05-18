@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query"
-import { pipelineApi } from "@/lib/pipeline-api"
+import { WorkspaceToolbar } from "@/components/workspace-toolbar"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
@@ -10,27 +10,55 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { useDataRefresh } from "@/hooks/use-data-refresh"
+import { formatDateTime, useWorkspace } from "@/hooks/use-workspace"
+import { pipelineApi } from "@/lib/pipeline-api"
 
 export function NewsPage() {
+  const { workspaceId, selectWorkspace, workspaces, activeWorkspace } = useWorkspace()
+  const { refresh, lastRefreshedAt } = useDataRefresh(workspaceId)
+
   const backlog = useQuery({
-    queryKey: ["news-backlog"],
-    queryFn: () => pipelineApi.newsBacklog(),
+    queryKey: ["news-backlog", workspaceId],
+    queryFn: () => pipelineApi.newsBacklog(workspaceId),
+    enabled: !!workspaceId,
     refetchInterval: 60_000,
   })
   const articles = useQuery({
-    queryKey: ["news-articles"],
-    queryFn: pipelineApi.newsArticles,
+    queryKey: ["news-articles", workspaceId],
+    queryFn: () => pipelineApi.newsArticles(workspaceId),
+    enabled: !!workspaceId,
     refetchInterval: 60_000,
   })
 
   return (
     <div className="space-y-8">
-      <header>
-        <h1 className="text-3xl font-semibold tracking-tight">News</h1>
-        <p className="mt-2 text-muted-foreground">
-          Backlog ingestion, processed articles, symbol mapping, and sentiment
-        </p>
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight">News</h1>
+          <p className="mt-2 text-muted-foreground">
+            Backlog and processed articles for{" "}
+            {activeWorkspace ? (
+              <span className="font-medium text-foreground">{activeWorkspace.name}</span>
+            ) : (
+              "your workspace"
+            )}{" "}
+            watchlist only
+          </p>
+        </div>
+        <WorkspaceToolbar
+          workspaceId={workspaceId}
+          workspaces={workspaces}
+          onWorkspaceChange={selectWorkspace}
+          onRefresh={() => refresh.mutate()}
+          isRefreshing={refresh.isPending}
+          lastRefreshedAt={lastRefreshedAt}
+        />
       </header>
+
+      {!workspaceId && (
+        <p className="text-sm text-muted-foreground">Select a workspace to load watchlist news.</p>
+      )}
 
       <section className="space-y-3">
         <h2 className="text-lg font-medium">Backlog</h2>
@@ -40,9 +68,10 @@ export function NewsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Source</TableHead>
+                  <TableHead>Published</TableHead>
+                  <TableHead>Pulled</TableHead>
                   <TableHead>Title</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Published</TableHead>
                   <TableHead>Guesses</TableHead>
                 </TableRow>
               </TableHeader>
@@ -50,6 +79,12 @@ export function NewsPage() {
                 {(backlog.data ?? []).slice(0, 40).map((item) => (
                   <TableRow key={item.id}>
                     <TableCell>{item.source}</TableCell>
+                    <TableCell className="whitespace-nowrap text-muted-foreground">
+                      {formatDateTime(item.publishedAt)}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-muted-foreground">
+                      {formatDateTime(item.discoveredAt)}
+                    </TableCell>
                     <TableCell className="max-w-md">
                       <a
                         href={item.url}
@@ -63,14 +98,18 @@ export function NewsPage() {
                     <TableCell>
                       <Badge variant="secondary">{item.status}</Badge>
                     </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {item.publishedAt ? new Date(item.publishedAt).toLocaleString() : "—"}
-                    </TableCell>
                     <TableCell className="font-mono text-xs">
                       {(item.rawSymbolGuess ?? []).join(", ") || "—"}
                     </TableCell>
                   </TableRow>
                 ))}
+                {(backlog.data ?? []).length === 0 && workspaceId && (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-muted-foreground">
+                      No backlog items for your watchlist symbols.
+                    </TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </CardContent>
@@ -88,6 +127,7 @@ export function NewsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Published</TableHead>
+                  <TableHead>Pulled</TableHead>
                   <TableHead>Source</TableHead>
                   <TableHead>Title</TableHead>
                   <TableHead>Symbols</TableHead>
@@ -97,10 +137,11 @@ export function NewsPage() {
               <TableBody>
                 {(articles.data ?? []).map((article) => (
                   <TableRow key={article.id}>
-                    <TableCell className="text-muted-foreground">
-                      {article.publishedAt
-                        ? new Date(article.publishedAt).toLocaleDateString()
-                        : "—"}
+                    <TableCell className="whitespace-nowrap text-muted-foreground">
+                      {formatDateTime(article.publishedAt)}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-muted-foreground">
+                      {formatDateTime(article.fetchedAt ?? article.discoveredAt)}
                     </TableCell>
                     <TableCell>{article.source}</TableCell>
                     <TableCell className="max-w-sm">
@@ -136,6 +177,13 @@ export function NewsPage() {
                     </TableCell>
                   </TableRow>
                 ))}
+                {(articles.data ?? []).length === 0 && workspaceId && (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-muted-foreground">
+                      No articles mapped to your watchlist yet.
+                    </TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </CardContent>

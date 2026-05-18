@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query"
-import { pipelineApi } from "@/lib/pipeline-api"
+import { WorkspaceToolbar } from "@/components/workspace-toolbar"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
@@ -10,30 +10,53 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { useDataRefresh } from "@/hooks/use-data-refresh"
+import { formatDateTime, useWorkspace } from "@/hooks/use-workspace"
+import { pipelineApi } from "@/lib/pipeline-api"
 
 export function FeaturesPage() {
+  const { workspaceId, selectWorkspace, workspaces, activeWorkspace } = useWorkspace()
+  const { refresh, lastRefreshedAt } = useDataRefresh(workspaceId)
+
   const snapshots = useQuery({
-    queryKey: ["snapshots"],
-    queryFn: pipelineApi.snapshots,
+    queryKey: ["snapshots", workspaceId],
+    queryFn: () => pipelineApi.snapshots(workspaceId),
+    enabled: !!workspaceId,
     refetchInterval: 120_000,
   })
 
   const ranked = [...(snapshots.data ?? [])].sort(
-    (a, b) => (b.combinedScore ?? 0) - (a.combinedScore ?? 0)
+    (a, b) => (b.combinedScore ?? 0) - (a.combinedScore ?? 0),
   )
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-3xl font-semibold tracking-tight">Features</h1>
-        <p className="mt-2 text-muted-foreground">
-          Combined market and news feature snapshots per symbol
-        </p>
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight">Features</h1>
+          <p className="mt-2 text-muted-foreground">
+            Combined market and news snapshots for{" "}
+            {activeWorkspace ? (
+              <span className="font-medium text-foreground">{activeWorkspace.name}</span>
+            ) : (
+              "your workspace"
+            )}{" "}
+            watchlist only
+          </p>
+        </div>
+        <WorkspaceToolbar
+          workspaceId={workspaceId}
+          workspaces={workspaces}
+          onWorkspaceChange={selectWorkspace}
+          onRefresh={() => refresh.mutate()}
+          isRefreshing={refresh.isPending}
+          lastRefreshedAt={lastRefreshedAt}
+        />
       </header>
 
       <Card className="border-border/70 shadow-sm">
         <CardHeader>
-          <CardTitle className="text-base">Ranked symbols</CardTitle>
+          <CardTitle className="text-base">Ranked watchlist symbols</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
@@ -45,7 +68,7 @@ export function FeaturesPage() {
                 <TableHead>News 24h</TableHead>
                 <TableHead>Avg sentiment 24h</TableHead>
                 <TableHead>Quality</TableHead>
-                <TableHead>Updated</TableHead>
+                <TableHead>Snapshot at</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -72,15 +95,15 @@ export function FeaturesPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
-                      {new Date(snap.timestamp).toLocaleString()}
+                      {formatDateTime(snap.timestamp)}
                     </TableCell>
                   </TableRow>
                 )
               })}
-              {ranked.length === 0 && (
+              {ranked.length === 0 && workspaceId && (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center text-muted-foreground">
-                    No snapshots yet — run market/news feature workflows first.
+                    No snapshots yet — click Get latest data after adding watchlist symbols.
                   </TableCell>
                 </TableRow>
               )}
