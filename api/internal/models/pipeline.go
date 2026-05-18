@@ -71,10 +71,49 @@ type ArticleSentiment struct {
 	SentimentLabel string    `json:"sentimentLabel"`
 	SentimentScore float64   `json:"sentimentScore"`
 	Confidence     float64   `json:"confidence"`
+	ProbPositive   *float64  `json:"probPositive,omitempty"`
+	ProbNegative   *float64  `json:"probNegative,omitempty"`
+	ProbNeutral    *float64  `json:"probNeutral,omitempty"`
 	ModelName      string    `json:"modelName"`
 	ModelVersion   *string   `json:"modelVersion,omitempty"`
 	InputMode      string    `json:"inputMode"`
 	CreatedAt      time.Time `json:"createdAt"`
+}
+
+// FinbertMetrics holds aggregated FinBERT softmax outputs for a symbol/time window.
+type FinbertMetrics struct {
+	AvgProbPositive1h       *float64 `json:"avgProbPositive1h,omitempty"`
+	AvgProbNegative1h       *float64 `json:"avgProbNegative1h,omitempty"`
+	AvgProbNeutral1h        *float64 `json:"avgProbNeutral1h,omitempty"`
+	AvgConfidence1h         *float64 `json:"avgConfidence1h,omitempty"`
+	PositiveLabelPct1h      *float64 `json:"positiveLabelPct1h,omitempty"`
+	NegativeLabelPct1h      *float64 `json:"negativeLabelPct1h,omitempty"`
+	NeutralLabelPct1h       *float64 `json:"neutralLabelPct1h,omitempty"`
+	MaxProbPositive1h       *float64 `json:"maxProbPositive1h,omitempty"`
+	MaxProbNegative1h       *float64 `json:"maxProbNegative1h,omitempty"`
+	HighConfPositive1h      int      `json:"highConfPositive1h"`
+	HighConfNegative1h      int      `json:"highConfNegative1h"`
+	WeightedSentiment1h     *float64 `json:"weightedSentiment1h,omitempty"`
+
+	AvgProbPositive4h       *float64 `json:"avgProbPositive4h,omitempty"`
+	AvgProbNegative4h       *float64 `json:"avgProbNegative4h,omitempty"`
+	AvgProbNeutral4h        *float64 `json:"avgProbNeutral4h,omitempty"`
+	AvgConfidence4h         *float64 `json:"avgConfidence4h,omitempty"`
+
+	AvgProbPositive24h      *float64 `json:"avgProbPositive24h,omitempty"`
+	AvgProbNegative24h      *float64 `json:"avgProbNegative24h,omitempty"`
+	AvgProbNeutral24h       *float64 `json:"avgProbNeutral24h,omitempty"`
+	AvgConfidence24h        *float64 `json:"avgConfidence24h,omitempty"`
+	PositiveLabelPct24h     *float64 `json:"positiveLabelPct24h,omitempty"`
+	NegativeLabelPct24h     *float64 `json:"negativeLabelPct24h,omitempty"`
+	NeutralLabelPct24h      *float64 `json:"neutralLabelPct24h,omitempty"`
+	MaxProbPositive24h      *float64 `json:"maxProbPositive24h,omitempty"`
+	MaxProbNegative24h      *float64 `json:"maxProbNegative24h,omitempty"`
+	MaxConfidence24h        *float64 `json:"maxConfidence24h,omitempty"`
+	HighConfPositive24h     int      `json:"highConfPositive24h"`
+	HighConfNegative24h     int      `json:"highConfNegative24h"`
+	WeightedSentiment24h    *float64 `json:"weightedSentiment24h,omitempty"`
+	LabelEntropy24h         *float64 `json:"labelEntropy24h,omitempty"`
 }
 
 type SymbolRow struct {
@@ -131,8 +170,9 @@ type NewsFeatures struct {
 	SentimentMomentum    *float64  `json:"sentimentMomentum,omitempty"`
 	NegativeNewsSpike    bool      `json:"negativeNewsSpike"`
 	PositiveNewsSpike    bool      `json:"positiveNewsSpike"`
-	MaxRelevanceScore24h *float64  `json:"maxRelevanceScore24h,omitempty"`
-	CreatedAt            time.Time `json:"createdAt"`
+	MaxRelevanceScore24h *float64        `json:"maxRelevanceScore24h,omitempty"`
+	Finbert              FinbertMetrics   `json:"finbert"`
+	CreatedAt            time.Time        `json:"createdAt"`
 }
 
 type SymbolFeatureSnapshot struct {

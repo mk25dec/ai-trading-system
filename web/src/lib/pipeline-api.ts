@@ -96,23 +96,67 @@ export interface WorkspaceSignal {
 export interface MarketFeatures {
   symbol: string
   timestamp: string
+  priceChange1h?: number
   priceChange24h?: number
   priceChange5d?: number
   volumeRatio?: number
   volatility?: number
   rsi?: number
   sma20?: number
+  sma50?: number
   distanceSma20?: number
+  distanceSma50?: number
+}
+
+export interface FinbertMetrics {
+  avgProbPositive1h?: number
+  avgProbNegative1h?: number
+  avgProbNeutral1h?: number
+  avgConfidence1h?: number
+  positiveLabelPct1h?: number
+  negativeLabelPct1h?: number
+  neutralLabelPct1h?: number
+  maxProbPositive1h?: number
+  maxProbNegative1h?: number
+  highConfPositive1h?: number
+  highConfNegative1h?: number
+  weightedSentiment1h?: number
+
+  avgProbPositive4h?: number
+  avgProbNegative4h?: number
+  avgProbNeutral4h?: number
+  avgConfidence4h?: number
+
+  avgProbPositive24h?: number
+  avgProbNegative24h?: number
+  avgProbNeutral24h?: number
+  avgConfidence24h?: number
+  positiveLabelPct24h?: number
+  negativeLabelPct24h?: number
+  neutralLabelPct24h?: number
+  maxProbPositive24h?: number
+  maxProbNegative24h?: number
+  maxConfidence24h?: number
+  highConfPositive24h?: number
+  highConfNegative24h?: number
+  weightedSentiment24h?: number
+  labelEntropy24h?: number
 }
 
 export interface NewsFeatures {
   symbol: string
   timestamp: string
   newsCount1h: number
+  newsCount4h: number
   newsCount24h: number
+  avgSentiment1h?: number
+  avgSentiment4h?: number
   avgSentiment24h?: number
+  sentimentMomentum?: number
   positiveNewsSpike: boolean
   negativeNewsSpike: boolean
+  maxRelevanceScore24h?: number
+  finbert?: FinbertMetrics
 }
 
 export interface MarketCandle {

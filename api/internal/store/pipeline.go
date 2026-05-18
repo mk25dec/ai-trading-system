@@ -361,23 +361,29 @@ func (s *PipelineStore) PendingSentiment(ctx context.Context, limit int) ([]Pend
 
 func (s *PipelineStore) UpsertSentiment(ctx context.Context, sent models.ArticleSentiment) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO article_sentiment (article_id, symbol, sentiment_label, sentiment_score, confidence, model_name, model_version, input_mode)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO article_sentiment (article_id, symbol, sentiment_label, sentiment_score, confidence,
+			prob_positive, prob_negative, prob_neutral, model_name, model_version, input_mode)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		ON CONFLICT (article_id, symbol) DO UPDATE SET
 			sentiment_label = EXCLUDED.sentiment_label,
 			sentiment_score = EXCLUDED.sentiment_score,
 			confidence = EXCLUDED.confidence,
+			prob_positive = EXCLUDED.prob_positive,
+			prob_negative = EXCLUDED.prob_negative,
+			prob_neutral = EXCLUDED.prob_neutral,
 			model_name = EXCLUDED.model_name,
 			model_version = EXCLUDED.model_version,
 			input_mode = EXCLUDED.input_mode`,
 		sent.ArticleID, sent.Symbol, sent.SentimentLabel, sent.SentimentScore, sent.Confidence,
+		sent.ProbPositive, sent.ProbNegative, sent.ProbNeutral,
 		sent.ModelName, sent.ModelVersion, sent.InputMode)
 	return err
 }
 
 func (s *PipelineStore) GetArticleSentiment(ctx context.Context, articleID string) ([]models.ArticleSentiment, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT article_id, symbol, sentiment_label, sentiment_score, confidence, model_name, model_version, input_mode, created_at
+		SELECT article_id, symbol, sentiment_label, sentiment_score, confidence,
+			prob_positive, prob_negative, prob_neutral, model_name, model_version, input_mode, created_at
 		FROM article_sentiment WHERE article_id = $1`, articleID)
 	if err != nil {
 		return nil, err
@@ -387,6 +393,7 @@ func (s *PipelineStore) GetArticleSentiment(ctx context.Context, articleID strin
 	for rows.Next() {
 		var s models.ArticleSentiment
 		if err := rows.Scan(&s.ArticleID, &s.Symbol, &s.SentimentLabel, &s.SentimentScore, &s.Confidence,
+			&s.ProbPositive, &s.ProbNegative, &s.ProbNeutral,
 			&s.ModelName, &s.ModelVersion, &s.InputMode, &s.CreatedAt); err != nil {
 			return nil, err
 		}
@@ -515,11 +522,15 @@ func (s *PipelineStore) UpsertMarketFeatures(ctx context.Context, f models.Marke
 }
 
 func (s *PipelineStore) UpsertNewsFeatures(ctx context.Context, f models.NewsFeatures) error {
-	_, err := s.pool.Exec(ctx, `
+	finbertJSON, err := json.Marshal(f.Finbert)
+	if err != nil {
+		finbertJSON = []byte("{}")
+	}
+	_, err = s.pool.Exec(ctx, `
 		INSERT INTO news_features (symbol, ts, news_count_1h, news_count_4h, news_count_24h,
 			avg_sentiment_1h, avg_sentiment_4h, avg_sentiment_24h, sentiment_momentum,
-			negative_news_spike, positive_news_spike, max_relevance_score_24h)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+			negative_news_spike, positive_news_spike, max_relevance_score_24h, finbert_metrics)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb)
 		ON CONFLICT (symbol, ts) DO UPDATE SET
 			news_count_1h = EXCLUDED.news_count_1h,
 			news_count_4h = EXCLUDED.news_count_4h,
@@ -530,10 +541,11 @@ func (s *PipelineStore) UpsertNewsFeatures(ctx context.Context, f models.NewsFea
 			sentiment_momentum = EXCLUDED.sentiment_momentum,
 			negative_news_spike = EXCLUDED.negative_news_spike,
 			positive_news_spike = EXCLUDED.positive_news_spike,
-			max_relevance_score_24h = EXCLUDED.max_relevance_score_24h`,
+			max_relevance_score_24h = EXCLUDED.max_relevance_score_24h,
+			finbert_metrics = EXCLUDED.finbert_metrics`,
 		f.Symbol, f.Timestamp, f.NewsCount1h, f.NewsCount4h, f.NewsCount24h,
 		f.AvgSentiment1h, f.AvgSentiment4h, f.AvgSentiment24h, f.SentimentMomentum,
-		f.NegativeNewsSpike, f.PositiveNewsSpike, f.MaxRelevanceScore24h)
+		f.NegativeNewsSpike, f.PositiveNewsSpike, f.MaxRelevanceScore24h, finbertJSON)
 	return err
 }
 
@@ -616,19 +628,23 @@ func (s *PipelineStore) LatestMarketFeatures(ctx context.Context, symbol string)
 
 func (s *PipelineStore) LatestNewsFeatures(ctx context.Context, symbol string) (*models.NewsFeatures, error) {
 	var f models.NewsFeatures
+	var finbertJSON []byte
 	err := s.pool.QueryRow(ctx, `
 		SELECT symbol, ts, news_count_1h, news_count_4h, news_count_24h,
 			avg_sentiment_1h, avg_sentiment_4h, avg_sentiment_24h, sentiment_momentum,
-			negative_news_spike, positive_news_spike, max_relevance_score_24h, created_at
+			negative_news_spike, positive_news_spike, max_relevance_score_24h, finbert_metrics, created_at
 		FROM news_features WHERE symbol = $1 ORDER BY ts DESC LIMIT 1`, symbol).Scan(
 		&f.Symbol, &f.Timestamp, &f.NewsCount1h, &f.NewsCount4h, &f.NewsCount24h,
 		&f.AvgSentiment1h, &f.AvgSentiment4h, &f.AvgSentiment24h, &f.SentimentMomentum,
-		&f.NegativeNewsSpike, &f.PositiveNewsSpike, &f.MaxRelevanceScore24h, &f.CreatedAt)
+		&f.NegativeNewsSpike, &f.PositiveNewsSpike, &f.MaxRelevanceScore24h, &finbertJSON, &f.CreatedAt)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
+	}
+	if len(finbertJSON) > 0 {
+		_ = json.Unmarshal(finbertJSON, &f.Finbert)
 	}
 	return &f, nil
 }
@@ -806,35 +822,37 @@ func (s *PipelineStore) CandlesForSymbol(ctx context.Context, symbol, timeframe 
 	return list, rows.Err()
 }
 
-func (s *PipelineStore) SentimentRowsSince(ctx context.Context, since time.Time) ([]struct {
-	Symbol    string
-	Score     float64
-	Relevance float64
-	At        time.Time
-}, error) {
+type SentimentDetailRow struct {
+	Symbol       string
+	Label        string
+	Score        float64
+	Confidence   float64
+	ProbPositive *float64
+	ProbNegative *float64
+	ProbNeutral  *float64
+	Relevance    float64
+	At           time.Time
+}
+
+func (s *PipelineStore) SentimentRowsSince(ctx context.Context, since time.Time) ([]SentimentDetailRow, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT s.symbol, s.sentiment_score, sym.relevance_score, s.created_at
+		SELECT s.symbol, s.sentiment_label, s.sentiment_score, s.confidence,
+			s.prob_positive, s.prob_negative, s.prob_neutral,
+			sym.relevance_score, COALESCE(a.published_at, s.created_at)
 		FROM article_sentiment s
 		JOIN article_symbols sym ON sym.article_id = s.article_id AND sym.symbol = s.symbol
-		WHERE s.created_at >= $1`, since)
+		JOIN news_articles a ON a.id = s.article_id
+		WHERE COALESCE(a.published_at, s.created_at) >= $1`, since)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var list []struct {
-		Symbol    string
-		Score     float64
-		Relevance float64
-		At        time.Time
-	}
+	var list []SentimentDetailRow
 	for rows.Next() {
-		var r struct {
-			Symbol    string
-			Score     float64
-			Relevance float64
-			At        time.Time
-		}
-		if err := rows.Scan(&r.Symbol, &r.Score, &r.Relevance, &r.At); err != nil {
+		var r SentimentDetailRow
+		if err := rows.Scan(&r.Symbol, &r.Label, &r.Score, &r.Confidence,
+			&r.ProbPositive, &r.ProbNegative, &r.ProbNeutral,
+			&r.Relevance, &r.At); err != nil {
 			return nil, err
 		}
 		list = append(list, r)

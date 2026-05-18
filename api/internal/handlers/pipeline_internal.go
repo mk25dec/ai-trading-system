@@ -265,20 +265,12 @@ func (h PipelineInternalHandler) RunSentimentBatch(w http.ResponseWriter, r *htt
 			lastErr = "empty text for sentiment"
 			continue
 		}
-		label, score, conf, err := h.Finbert.Analyze(r.Context(), text)
+		res, err := h.Finbert.AnalyzeFull(r.Context(), text)
 		if err != nil {
 			lastErr = err.Error()
 			continue
 		}
-		sent := models.ArticleSentiment{
-			ArticleID:      p.ArticleID,
-			Symbol:         p.Symbol,
-			SentimentLabel: label,
-			SentimentScore: score,
-			Confidence:     conf,
-			ModelName:      "finbert",
-			InputMode:      "excerpt",
-		}
+		sent := services.ArticleSentimentFromFinbert(p.ArticleID, p.Symbol, res)
 		if err := h.Store.UpsertSentiment(r.Context(), sent); err != nil {
 			lastErr = err.Error()
 			continue
@@ -396,10 +388,7 @@ func (h PipelineInternalHandler) GenerateNewsFeatures(w http.ResponseWriter, r *
 	}
 	generated := 0
 	for _, sym := range syms {
-		sentRows := make([]services.SentimentRow, len(rows))
-		for i, r := range rows {
-			sentRows[i] = services.SentimentRow{Symbol: r.Symbol, Score: r.Score, Relevance: r.Relevance, At: r.At}
-		}
+		sentRows := services.SentimentRowsFromDetails(rows)
 		f := services.AggregateNewsFeatures(sym, sentRows, now)
 		if err := h.Store.UpsertNewsFeatures(r.Context(), f); err != nil {
 			continue

@@ -138,13 +138,6 @@ func meanInt64(values []int64) float64 {
 	return float64(sum) / float64(len(values))
 }
 
-type SentimentRow struct {
-	Symbol    string
-	Score     float64
-	Relevance float64
-	At        time.Time
-}
-
 func AggregateNewsFeatures(symbol string, rows []SentimentRow, now time.Time) models.NewsFeatures {
 	f := models.NewsFeatures{Symbol: symbol, Timestamp: now}
 	var scores1h, scores4h, scores24h []float64
@@ -195,6 +188,7 @@ func AggregateNewsFeatures(symbol string, rows []SentimentRow, now time.Time) mo
 	if maxRel > 0 {
 		f.MaxRelevanceScore24h = &maxRel
 	}
+	f.Finbert = AggregateFinbertMetrics(symbol, rows, now)
 	return f
 }
 
@@ -225,40 +219,70 @@ func BuildSnapshot(symbol string, market *models.MarketFeatures, news *models.Ne
 
 	if market != nil {
 		snap.MarketFeatures["priceChange24h"] = market.PriceChange24h
+		snap.MarketFeatures["priceChange5d"] = market.PriceChange5d
 		snap.MarketFeatures["rsi"] = market.RSI
 		snap.MarketFeatures["volumeRatio"] = market.VolumeRatio
-		if market.PriceChange24h != nil {
-			present++
-		} else {
-			snap.MissingFields = append(snap.MissingFields, "priceChange24h")
+		snap.MarketFeatures["volatility"] = market.Volatility
+		snap.MarketFeatures["distanceSma20"] = market.DistanceSMA20
+		snap.MarketFeatures["distanceSma50"] = market.DistanceSMA50
+		marketChecks := []struct {
+			key string
+			ok  bool
+		}{
+			{"priceChange24h", market.PriceChange24h != nil},
+			{"priceChange5d", market.PriceChange5d != nil},
+			{"rsi", market.RSI != nil},
+			{"volumeRatio", market.VolumeRatio != nil},
+			{"volatility", market.Volatility != nil},
+			{"distanceSma20", market.DistanceSMA20 != nil},
 		}
-		fields += 3
-		if market.RSI != nil {
-			present++
-		}
-		if market.VolumeRatio != nil {
-			present++
+		for _, c := range marketChecks {
+			fields++
+			if c.ok {
+				present++
+			} else {
+				snap.MissingFields = append(snap.MissingFields, c.key)
+			}
 		}
 	} else {
 		snap.MissingFields = append(snap.MissingFields, "market_features")
-		fields += 3
+		fields += 6
 	}
 
 	if news != nil {
+		snap.NewsFeatures["newsCount1h"] = news.NewsCount1h
+		snap.NewsFeatures["newsCount4h"] = news.NewsCount4h
 		snap.NewsFeatures["newsCount24h"] = news.NewsCount24h
+		snap.NewsFeatures["avgSentiment1h"] = news.AvgSentiment1h
+		snap.NewsFeatures["avgSentiment4h"] = news.AvgSentiment4h
 		snap.NewsFeatures["avgSentiment24h"] = news.AvgSentiment24h
-		fields += 2
-		if news.AvgSentiment24h != nil {
-			present++
-		} else {
-			snap.MissingFields = append(snap.MissingFields, "avgSentiment24h")
+		snap.NewsFeatures["sentimentMomentum"] = news.SentimentMomentum
+		snap.NewsFeatures["positiveNewsSpike"] = news.PositiveNewsSpike
+		snap.NewsFeatures["negativeNewsSpike"] = news.NegativeNewsSpike
+		snap.NewsFeatures["maxRelevanceScore24h"] = news.MaxRelevanceScore24h
+		snap.NewsFeatures["finbert"] = news.Finbert
+		newsChecks := []struct {
+			key string
+			ok  bool
+		}{
+			{"avgSentiment24h", news.AvgSentiment24h != nil},
+			{"avgSentiment1h", news.AvgSentiment1h != nil},
+			{"sentimentMomentum", news.SentimentMomentum != nil},
+			{"newsCount24h", news.NewsCount24h > 0},
+			{"finbert.avgProbNegative24h", news.Finbert.AvgProbNegative24h != nil},
+			{"finbert.avgConfidence24h", news.Finbert.AvgConfidence24h != nil},
 		}
-		if news.NewsCount24h > 0 {
-			present++
+		for _, c := range newsChecks {
+			fields++
+			if c.ok {
+				present++
+			} else {
+				snap.MissingFields = append(snap.MissingFields, c.key)
+			}
 		}
 	} else {
 		snap.MissingFields = append(snap.MissingFields, "news_features")
-		fields += 2
+		fields += 4
 	}
 
 	if fields > 0 {

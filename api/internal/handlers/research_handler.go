@@ -176,12 +176,7 @@ func (h ResearchHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		_ = h.Store.UpsertMarketFeatures(r.Context(), *f)
 	}
 
-	allSent := make([]services.SentimentRow, 0, len(sentRows))
-	for _, row := range sentRows {
-		allSent = append(allSent, services.SentimentRow{
-			Symbol: row.Symbol, Score: row.Score, Relevance: row.Relevance, At: row.At,
-		})
-	}
+	allSent := services.SentimentRowsFromDetails(sentRows)
 	for _, sym := range symbols {
 		f := services.AggregateNewsFeatures(sym, allSent, now)
 		_ = h.Store.UpsertNewsFeatures(r.Context(), f)
@@ -293,19 +288,11 @@ func (h ResearchHandler) runSentimentBatch(ctx context.Context, limit int) int {
 		if strings.TrimSpace(text) == "" {
 			continue
 		}
-		label, score, conf, err := h.Finbert.Analyze(ctx, text)
+		res, err := h.Finbert.AnalyzeFull(ctx, text)
 		if err != nil {
 			continue
 		}
-		sent := models.ArticleSentiment{
-			ArticleID:      p.ArticleID,
-			Symbol:         p.Symbol,
-			SentimentLabel: label,
-			SentimentScore: score,
-			Confidence:     conf,
-			ModelName:      "finbert",
-			InputMode:      "excerpt",
-		}
+		sent := services.ArticleSentimentFromFinbert(p.ArticleID, p.Symbol, res)
 		if err := h.Store.UpsertSentiment(ctx, sent); err != nil {
 			continue
 		}
