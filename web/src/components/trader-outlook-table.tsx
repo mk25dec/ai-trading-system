@@ -1,8 +1,18 @@
 import type { ReactNode } from "react"
-import { AlertTriangle, ChevronDown, ChevronRight } from "lucide-react"
+import {
+  AlertTriangle,
+  ChevronDown,
+  ChevronRight,
+  Minus,
+  Newspaper,
+  TrendingDown,
+  TrendingUp,
+} from "lucide-react"
+import { DecisionHeroPanel } from "@/components/decision/decision-hero-panel"
+import { MiniSparkline } from "@/components/decision/mini-sparkline"
+import { ScoreGauge } from "@/components/decision/score-gauge"
 import { HorizonOutlookBadge } from "@/components/horizon-outlook-badge"
 import { RecommendationBadge } from "@/components/recommendation-badge"
-import { Badge } from "@/components/ui/badge"
 import {
   Table,
   TableBody,
@@ -15,10 +25,15 @@ import {
   alignmentLabel,
   priceTrendLabel,
   resolveDecision,
-  riskTone,
   stanceLabel,
 } from "@/lib/decision-engine"
-import { formatPct, pctClass, sentimentClass } from "@/lib/feature-metrics"
+import {
+  actionAccent,
+  alignmentSpectrum,
+  riskSpectrum,
+  stanceSpectrum,
+} from "@/lib/decision-visuals"
+import { formatPct, pctClass } from "@/lib/feature-metrics"
 import type { RecommendationAction, ResearchStockRow } from "@/lib/pipeline-api"
 import { cn } from "@/lib/utils"
 
@@ -38,18 +53,18 @@ export function TraderOutlookTable({
   return (
     <Table>
       <TableHeader>
-        <TableRow className="hover:bg-transparent">
+        <TableRow className="border-b bg-muted/30 hover:bg-muted/30">
           <TableHead className="w-8" />
           <TableHead>Symbol</TableHead>
+          <TableHead className="w-[72px]">Chart</TableHead>
           <TableHead>Signal</TableHead>
           <TableHead className="text-right">Score</TableHead>
-          <TableHead className="text-right">Conf.</TableHead>
-          <TableHead className="text-center">3D · 1W · 1M</TableHead>
+          <TableHead className="text-center">Horizons</TableHead>
           <TableHead>Price</TableHead>
-          <TableHead>News AI</TableHead>
+          <TableHead>News</TableHead>
           <TableHead>Risk</TableHead>
           <TableHead>Alignment</TableHead>
-          <TableHead className="min-w-[140px]">Key driver</TableHead>
+          <TableHead className="min-w-[120px]">Driver</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -64,7 +79,7 @@ export function TraderOutlookTable({
         ))}
         {rows.length === 0 && emptyMessage && (
           <TableRow>
-            <TableCell colSpan={11} className="text-center text-muted-foreground">
+            <TableCell colSpan={11} className="py-12 text-center text-muted-foreground">
               {emptyMessage}
             </TableCell>
           </TableRow>
@@ -87,106 +102,128 @@ function TraderOutlookRow({
 }) {
   const d = resolveDecision(row)
   const action = (d.primaryAction || row.recommendation) as RecommendationAction
+  const stance = stanceSpectrum(d.newsStance)
+  const risk = riskSpectrum(d.riskLevel)
+  const align = alignmentSpectrum(d.alignment)
+
+  const TrendIcon =
+    d.priceTrend === "uptrend"
+      ? TrendingUp
+      : d.priceTrend === "downtrend"
+        ? TrendingDown
+        : Minus
 
   return (
     <>
-      <TableRow className="cursor-pointer hover:bg-muted/40" onClick={onToggle}>
-        <TableCell>
+      <TableRow
+        className={cn(
+          "cursor-pointer border-l-4 transition-colors hover:bg-muted/50",
+          actionAccent(action),
+          open && "bg-muted/30",
+        )}
+        onClick={onToggle}
+      >
+        <TableCell className="w-8">
           {open ? (
-            <ChevronDown className="size-4 text-muted-foreground" />
+            <ChevronDown className="size-4 text-primary" />
           ) : (
             <ChevronRight className="size-4 text-muted-foreground" />
           )}
         </TableCell>
         <TableCell>
-          <div className="font-mono font-semibold">{row.symbol}</div>
-          <div className="text-xs text-muted-foreground">{row.name}</div>
+          <div className="font-mono text-base font-bold tracking-tight">{row.symbol}</div>
+          <div className="truncate text-xs text-muted-foreground">{row.name}</div>
         </TableCell>
         <TableCell>
-          <div className="flex flex-col gap-1">
-            <RecommendationBadge action={action} />
-            <span className="text-[10px] text-muted-foreground">{d.primaryOutlook}</span>
-          </div>
+          <MiniSparkline candles={row.candles ?? []} />
+        </TableCell>
+        <TableCell>
+          <RecommendationBadge action={action} />
+          <p className="mt-1 text-[10px] font-medium text-muted-foreground">{d.primaryOutlook}</p>
         </TableCell>
         <TableCell className="text-right">
-          <span className="font-mono text-lg font-semibold tabular-nums">
-            {d.compositeScore.toFixed(0)}
-          </span>
-          <span className="text-xs text-muted-foreground">/100</span>
-        </TableCell>
-        <TableCell className="text-right font-mono tabular-nums">
-          {(d.confidence * 100).toFixed(0)}%
+          <ScoreGauge score={d.compositeScore} size="sm" />
         </TableCell>
         <TableCell>
-          <div className="flex justify-center gap-2">
+          <div className="flex justify-center gap-1.5">
             {d.horizons.map((h) => (
               <HorizonOutlookBadge key={h.id} horizon={h} />
             ))}
           </div>
         </TableCell>
         <TableCell>
-          <div className="text-sm font-medium">{priceTrendLabel(d.priceTrend)}</div>
-          <div
-            className={cn(
-              "font-mono text-xs tabular-nums",
-              pctClass(row.market?.priceChange24h),
-            )}
-          >
-            {formatPct(row.market?.priceChange24h)}
+          <div className="flex items-center gap-1.5">
+            <TrendIcon
+              className={cn(
+                "size-4 shrink-0",
+                d.priceTrend === "uptrend" && "text-emerald-600 dark:text-emerald-400",
+                d.priceTrend === "downtrend" && "text-red-600 dark:text-red-400",
+                d.priceTrend === "sideways" && "text-muted-foreground",
+              )}
+            />
+            <div>
+              <p className="text-xs font-semibold">{priceTrendLabel(d.priceTrend)}</p>
+              <p className={cn("font-mono text-xs tabular-nums", pctClass(row.market?.priceChange24h))}>
+                {formatPct(row.market?.priceChange24h)}
+              </p>
+            </div>
           </div>
         </TableCell>
         <TableCell>
           <div
             className={cn(
-              "text-sm font-medium capitalize",
-              sentimentClass(
-                row.news?.avgSentiment24h ??
-                  (d.newsStance === "bullish" ? 0.3 : d.newsStance === "bearish" ? -0.3 : 0),
-              ),
+              "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-semibold",
+              stance.bg,
+              stance.text,
             )}
           >
+            <Newspaper className="size-3.5 shrink-0 opacity-70" />
             {stanceLabel(d.newsStance)}
           </div>
           {d.newsConfidence != null && (
-            <div className="text-[10px] text-muted-foreground">
-              {(d.newsConfidence * 100).toFixed(0)}% model conf.
-            </div>
+            <p className="mt-1 font-mono text-[10px] text-muted-foreground">
+              {(d.newsConfidence * 100).toFixed(0)}% conf.
+            </p>
           )}
         </TableCell>
         <TableCell>
-          <Badge
-            variant={
-              riskTone(d.riskLevel) === "negative"
-                ? "destructive"
-                : riskTone(d.riskLevel) === "positive"
-                  ? "default"
-                  : "secondary"
-            }
-            className="capitalize"
+          <span
+            className={cn(
+              "inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold capitalize",
+              risk.bg,
+              risk.text,
+            )}
           >
-            {d.riskLevel}
-          </Badge>
+            {risk.label}
+          </span>
         </TableCell>
         <TableCell>
-          <div className="flex items-center gap-1">
-            <span className="text-xs">{alignmentLabel(d.alignment)}</span>
-            {d.conflict && (
-              <AlertTriangle className="size-3.5 text-amber-600" aria-label="Conflicting signals" />
+          <span
+            className={cn(
+              "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium",
+              align.bg,
+              align.text,
             )}
-          </div>
+          >
+            {alignmentLabel(d.alignment)}
+            {d.conflict && <AlertTriangle className="size-3.5 text-amber-600" />}
+          </span>
         </TableCell>
-        <TableCell className="text-xs text-muted-foreground leading-snug">
+        <TableCell className="max-w-[160px] truncate text-xs text-muted-foreground">
           {d.drivers[0] ?? "—"}
         </TableCell>
       </TableRow>
       {open && (
-        <TableRow>
-          <TableCell colSpan={11} className="bg-muted/20 p-4">
-            {renderDetail ? (
-              renderDetail(row)
-            ) : (
-              <DecisionDetailPanel row={row} decision={d} />
-            )}
+        <TableRow className="hover:bg-transparent">
+          <TableCell colSpan={11} className={cn("border-l-4 bg-muted/15 p-0", actionAccent(action))}>
+            <div className="space-y-4 p-5">
+              <DecisionHeroPanel decision={d} />
+              {renderDetail ? (
+                renderDetail(row)
+              ) : (
+                <DecisionDetailPanel row={row} decision={d} />
+              )}
+            </div>
           </TableCell>
         </TableRow>
       )}
@@ -204,71 +241,39 @@ export function DecisionDetailPanel({
   children?: React.ReactNode
 }) {
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
+    <div className="grid gap-6 border-t pt-4 lg:grid-cols-2">
       <div className="space-y-4">
         <div>
           <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Decision summary
-          </p>
-          <p className="text-sm leading-relaxed">
-            Composite <span className="font-mono font-semibold">{decision.compositeScore.toFixed(0)}/100</span>{" "}
-            with {(decision.confidence * 100).toFixed(0)}% confidence. Primary outlook:{" "}
-            <span className="font-medium">{decision.primaryOutlook}</span>.
-            {decision.conflict && decision.conflictNote && (
-              <span className="mt-2 block text-amber-700 dark:text-amber-300">
-                Conflict: {decision.conflictNote}
-              </span>
-            )}
-          </p>
-        </div>
-        <div>
-          <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Drivers
-          </p>
-          <ul className="space-y-1.5 text-sm">
-            {decision.drivers.map((driver, i) => (
-              <li key={i} className="flex gap-2">
-                <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary" />
-                <span>{driver}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div>
-          <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Analysis
+            Analysis notes
           </p>
           <ul className="space-y-2 text-sm leading-relaxed">
             {row.bullets.map((b, i) => (
-              <li key={i} className="flex gap-2">
-                <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-muted-foreground/50" />
+              <li key={i} className="flex gap-2 rounded-lg bg-card/80 px-3 py-2">
+                <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary" />
                 <span>{b}</span>
               </li>
             ))}
           </ul>
         </div>
+        <div>
+          <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            Key drivers
+          </p>
+          <ul className="space-y-1.5">
+            {decision.drivers.map((driver, i) => (
+              <li
+                key={i}
+                className="flex gap-2 rounded-md border border-border/60 bg-background/50 px-3 py-2 text-sm"
+              >
+                <span className="font-mono text-xs text-muted-foreground">{i + 1}.</span>
+                <span>{driver}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
       </div>
-      <div className="space-y-4">
-        {decision.categories && decision.categories.length > 0 && (
-          <div>
-            <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              Category scores
-            </p>
-            <dl className="space-y-2">
-              {decision.categories.map((c) => (
-                <div key={c.id} className="flex justify-between gap-4 text-xs">
-                  <dt className="text-muted-foreground">{c.label}</dt>
-                  <dd className="font-mono tabular-nums">
-                    {(c.score >= 0 ? "+" : "") + (c.score * 100).toFixed(0)}% ·{" "}
-                    {(c.confidence * 100).toFixed(0)}% conf.
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          </div>
-        )}
-        {children}
-      </div>
+      <div>{children}</div>
     </div>
   )
 }

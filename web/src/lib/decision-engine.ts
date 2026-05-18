@@ -117,6 +117,63 @@ export function priceTrendLabel(trend: string): string {
   }
 }
 
+export function buildTraderKpis(
+  rows: ResearchStockRow[],
+  extras?: { buy?: number; sell?: number; avoid?: number; watchlist?: number; quality?: string },
+) {
+  const d = summarizeDecisions(rows)
+  return [
+    {
+      label: "Watchlist",
+      value: extras?.watchlist ?? rows.length,
+      hint: "Symbols scored",
+      icon: "target" as const,
+      tone: "neutral" as const,
+    },
+    {
+      label: "Buy signals",
+      value: extras?.buy ?? rows.filter((r) => resolveDecision(r).primaryAction === "buy_candidate").length,
+      hint: "Actionable long bias",
+      icon: "bull" as const,
+      tone: "positive" as const,
+    },
+    {
+      label: "Sell / avoid",
+      value:
+        extras?.sell != null && extras?.avoid != null
+          ? extras.sell + extras.avoid
+          : rows.filter((r) => {
+              const a = resolveDecision(r).primaryAction
+              return a === "sell_candidate" || a === "avoid"
+            }).length,
+      hint: "Reduce or exit bias",
+      icon: "bear" as const,
+      tone: "negative" as const,
+    },
+    {
+      label: "Horizons aligned ↑",
+      value: d.alignedBull,
+      hint: "3D · 1W · 1M bullish",
+      icon: "bull" as const,
+      tone: d.alignedBull > 0 ? ("positive" as const) : ("neutral" as const),
+    },
+    {
+      label: "Conflicts",
+      value: d.conflict,
+      hint: "Price vs news or horizons",
+      icon: "conflict" as const,
+      tone: d.conflict > 0 ? ("warning" as const) : ("neutral" as const),
+    },
+    {
+      label: "High risk",
+      value: d.highRisk,
+      hint: extras?.quality ? `Avg quality ${extras.quality}` : "Volatility / spikes",
+      icon: "risk" as const,
+      tone: d.highRisk > 0 ? ("warning" as const) : ("neutral" as const),
+    },
+  ]
+}
+
 export function summarizeDecisions(rows: ResearchStockRow[]) {
   let alignedBull = 0
   let alignedBear = 0

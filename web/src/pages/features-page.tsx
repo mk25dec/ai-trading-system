@@ -2,7 +2,8 @@ import { useQuery } from "@tanstack/react-query"
 import { AlertTriangle, TrendingDown, TrendingUp } from "lucide-react"
 import { useMemo, useState } from "react"
 import { WorkspaceToolbar } from "@/components/workspace-toolbar"
-import { TraderOutlookTable, DecisionDetailPanel } from "@/components/trader-outlook-table"
+import { TraderKpiCards } from "@/components/decision/trader-kpi-cards"
+import { TraderOutlookTable } from "@/components/trader-outlook-table"
 import { RecommendationBadge } from "@/components/recommendation-badge"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -32,7 +33,7 @@ import {
   summarizeRows,
   type FeatureRow,
 } from "@/lib/feature-metrics"
-import { resolveDecision, summarizeDecisions } from "@/lib/decision-engine"
+import { buildTraderKpis } from "@/lib/decision-engine"
 import {
   pipelineApi,
   type FinbertMetrics,
@@ -70,7 +71,18 @@ export function FeaturesPage() {
   }, [board.data?.rows, snapshots.data])
 
   const summary = useMemo(() => summarizeRows(rows), [rows])
-  const decisionSummary = useMemo(() => summarizeDecisions(rows), [rows])
+  const kpis = useMemo(
+    () =>
+      buildTraderKpis(rows, {
+        buy: summary.buy,
+        sell: summary.sell,
+        avoid: summary.avoid,
+        watchlist: summary.total,
+        quality:
+          summary.avgQuality != null ? `${(summary.avgQuality * 100).toFixed(0)}%` : undefined,
+      }),
+    [rows, summary],
+  )
 
   return (
     <div className="space-y-6">
@@ -113,38 +125,8 @@ export function FeaturesPage() {
         </Card>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <SummaryCard label="Watchlist" value={String(summary.total)} />
-        <SummaryCard
-          label="Buy candidates"
-          value={String(summary.buy)}
-          tone={summary.buy > 0 ? "positive" : "neutral"}
-        />
-        <SummaryCard
-          label="Sell / avoid"
-          value={String(summary.sell + summary.avoid)}
-          tone={summary.sell + summary.avoid > 0 ? "negative" : "neutral"}
-        />
-        <SummaryCard
-          label="News spikes"
-          value={`+${summary.posSpike} / −${summary.negSpike}`}
-        />
-        <SummaryCard
-          label="Avg data quality"
-          value={
-            summary.avgQuality != null ? `${(summary.avgQuality * 100).toFixed(0)}%` : "—"
-          }
-        />
-      </div>
+      {rows.length > 0 && <TraderKpiCards items={kpis} />}
 
-      {rows.length > 0 && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <SummaryCard label="Horizons aligned ↑" value={String(decisionSummary.alignedBull)} />
-          <SummaryCard label="Horizons aligned ↓" value={String(decisionSummary.alignedBear)} />
-          <SummaryCard label="Signal conflicts" value={String(decisionSummary.conflict)} />
-          <SummaryCard label="High risk names" value={String(decisionSummary.highRisk)} />
-        </div>
-      )}
 
       <Card className="border-border/70 shadow-sm">
         <CardHeader className="pb-2">
@@ -316,39 +298,14 @@ export function FeaturesPage() {
   )
 }
 
-function SummaryCard({
-  label,
-  value,
-  tone = "neutral",
-}: {
-  label: string
-  value: string
-  tone?: "positive" | "negative" | "neutral"
-}) {
-  return (
-    <Card className="border-border/70 shadow-sm">
-      <CardContent className="py-4">
-        <p className="text-xs font-medium text-muted-foreground">{label}</p>
-        <p
-          className={cn(
-            "mt-1 text-2xl font-semibold tabular-nums",
-            tone === "positive" && "text-emerald-600 dark:text-emerald-400",
-            tone === "negative" && "text-red-600 dark:text-red-400",
-          )}
-        >
-          {value}
-        </p>
-      </CardContent>
-    </Card>
-  )
-}
-
 function FeaturesAnalystDetail({ row }: { row: FeatureRow }) {
-  const decision = resolveDecision(row)
   return (
-    <DecisionDetailPanel row={row} decision={decision}>
+    <div className="border-t pt-4">
+      <p className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+        Analyst evidence — FinBERT & market rollups
+      </p>
       <FeatureDetailMetrics row={row} />
-    </DecisionDetailPanel>
+    </div>
   )
 }
 

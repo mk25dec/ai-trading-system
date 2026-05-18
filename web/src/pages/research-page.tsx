@@ -6,12 +6,13 @@ import { WorkspaceToolbar } from "@/components/workspace-toolbar"
 import { useDataRefresh } from "@/hooks/use-data-refresh"
 import { formatDateTime, useWorkspace } from "@/hooks/use-workspace"
 import { PriceChart } from "@/components/price-chart"
-import { DecisionDetailPanel, TraderOutlookTable } from "@/components/trader-outlook-table"
+import { TraderKpiCards } from "@/components/decision/trader-kpi-cards"
+import { TraderOutlookTable } from "@/components/trader-outlook-table"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { resolveDecision, summarizeDecisions } from "@/lib/decision-engine"
+import { buildTraderKpis } from "@/lib/decision-engine"
 import { sortResearchRows } from "@/lib/feature-metrics"
 import { pipelineApi, type ResearchStockRow } from "@/lib/pipeline-api"
 
@@ -51,10 +52,7 @@ export function ResearchPage() {
     [board.data?.rows],
   )
 
-  const decisionSummary = useMemo(
-    () => summarizeDecisions(sortedRows),
-    [sortedRows],
-  )
+  const kpis = useMemo(() => buildTraderKpis(sortedRows), [sortedRows])
 
   function addSymbol() {
     const sym = symbolInput.trim().toUpperCase()
@@ -110,14 +108,7 @@ export function ResearchPage() {
         </Card>
       )}
 
-      {sortedRows.length > 0 && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <SummaryChip label="Aligned bullish" value={String(decisionSummary.alignedBull)} />
-          <SummaryChip label="Aligned bearish" value={String(decisionSummary.alignedBear)} />
-          <SummaryChip label="Conflicts" value={String(decisionSummary.conflict)} />
-          <SummaryChip label="High risk" value={String(decisionSummary.highRisk)} />
-        </div>
-      )}
+      {sortedRows.length > 0 && <TraderKpiCards items={kpis} />}
 
       <Card className="border-border/70 shadow-sm">
         <CardHeader className="pb-3">
@@ -185,17 +176,6 @@ export function ResearchPage() {
   )
 }
 
-function SummaryChip({ label, value }: { label: string; value: string }) {
-  return (
-    <Card className="border-border/70 shadow-sm">
-      <CardContent className="py-3">
-        <p className="text-xs text-muted-foreground">{label}</p>
-        <p className="mt-0.5 text-xl font-semibold tabular-nums">{value}</p>
-      </CardContent>
-    </Card>
-  )
-}
-
 function ResearchOutlookWithDetail({
   rows,
   expanded,
@@ -224,43 +204,40 @@ function ResearchOutlookWithDetail({
 }
 
 export function ResearchRowDetail({ row }: { row: ResearchStockRow }) {
-  const decision = resolveDecision(row)
   return (
-    <DecisionDetailPanel row={row} decision={decision}>
+    <div className="border-t pt-4">
+      <p className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+        Price & headlines
+      </p>
       <div className="grid gap-6 lg:grid-cols-2">
-        <div>
-          <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Price (90d)
-          </p>
-          <PriceChart candles={row.candles} />
-        </div>
-        {row.headlines.length > 0 && (
-          <div>
-            <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              Recent news
-            </p>
-            <ul className="space-y-2 text-sm">
-              {row.headlines.map((h) => (
-                <li key={h.url}>
-                  <a
-                    href={h.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="font-medium text-primary hover:underline"
-                  >
-                    {h.title}
-                  </a>
-                  {h.sentimentLabel && (
-                    <span className="ml-2 text-xs text-muted-foreground">
-                      FinBERT: {h.sentimentLabel}
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
+        <PriceChart candles={row.candles} height={160} />
+        {row.headlines.length > 0 ? (
+          <ul className="space-y-2 text-sm">
+            {row.headlines.map((h) => (
+              <li
+                key={h.url}
+                className="rounded-lg border border-border/60 bg-card/80 px-3 py-2"
+              >
+                <a
+                  href={h.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-medium text-primary hover:underline"
+                >
+                  {h.title}
+                </a>
+                {h.sentimentLabel && (
+                  <span className="mt-1 block text-xs text-muted-foreground">
+                    FinBERT: {h.sentimentLabel}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-muted-foreground">No recent headlines ingested.</p>
         )}
       </div>
-    </DecisionDetailPanel>
+    </div>
   )
 }
