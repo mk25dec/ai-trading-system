@@ -38,15 +38,34 @@ type finbertWindow struct {
 	maxPos             float64
 	maxNeg             float64
 	maxConf            float64
+	sumPosProb         float64
+	sumNegProb         float64
+	sumNeuProb         float64
+	probWeightSum      float64
+}
+
+func articleWeight(rel, confidence float64) float64 {
+	if rel <= 0 {
+		rel = 0.5
+	}
+	return clamp(rel, 0.2, 1) * clamp(confidence, 0.05, 1)
 }
 
 func (w *finbertWindow) add(r SentimentRow) {
 	w.count++
+	wt := articleWeight(r.Relevance, r.Confidence)
+
 	w.posProbs = append(w.posProbs, r.ProbPositive)
 	w.negProbs = append(w.negProbs, r.ProbNegative)
 	w.neuProbs = append(w.neuProbs, r.ProbNeutral)
 	w.confidences = append(w.confidences, r.Confidence)
 	w.scores = append(w.scores, r.Score)
+
+	w.sumPosProb += r.ProbPositive * wt
+	w.sumNegProb += r.ProbNegative * wt
+	w.sumNeuProb += r.ProbNeutral * wt
+	w.probWeightSum += wt
+
 	if r.ProbPositive > w.maxPos {
 		w.maxPos = r.ProbPositive
 	}
@@ -64,8 +83,8 @@ func (w *finbertWindow) add(r SentimentRow) {
 			w.highConfNeg++
 		}
 	}
-	w.weightedNum += r.Score * r.Confidence
-	w.weightedDen += r.Confidence
+	w.weightedNum += r.Score * wt
+	w.weightedDen += wt
 
 	switch r.Label {
 	case "positive":
@@ -75,6 +94,13 @@ func (w *finbertWindow) add(r SentimentRow) {
 	default:
 		w.neuLabels++
 	}
+}
+
+func weightedAvg(sum, weightSum float64, fallback []float64) float64 {
+	if weightSum > 0 {
+		return sum / weightSum
+	}
+	return avg(fallback)
 }
 
 func AggregateFinbertMetrics(symbol string, rows []SentimentRow, now time.Time) models.FinbertMetrics {
@@ -111,9 +137,9 @@ func applyWindow(m *models.FinbertMetrics, window string, w finbertWindow) {
 	posPct := float64(w.posLabels) / n
 	negPct := float64(w.negLabels) / n
 	neuPct := float64(w.neuLabels) / n
-	avgPos := avg(w.posProbs)
-	avgNeg := avg(w.negProbs)
-	avgNeu := avg(w.neuProbs)
+	avgPos := weightedAvg(w.sumPosProb, w.probWeightSum, w.posProbs)
+	avgNeg := weightedAvg(w.sumNegProb, w.probWeightSum, w.negProbs)
+	avgNeu := weightedAvg(w.sumNeuProb, w.probWeightSum, w.neuProbs)
 	avgConf := avg(w.confidences)
 	var weighted *float64
 	if w.weightedDen > 0 {

@@ -326,7 +326,7 @@ func (h ResearchHandler) runSentimentBatch(ctx context.Context, limit int) int {
 	}
 	processed := 0
 	for _, p := range pending {
-		text := services.ExcerptForSentiment(p.Title, p.CleanedText, 1500)
+		text, inputMode := services.TextForFinBERT(p.Title, p.CleanedText)
 		if strings.TrimSpace(text) == "" {
 			continue
 		}
@@ -334,7 +334,7 @@ func (h ResearchHandler) runSentimentBatch(ctx context.Context, limit int) int {
 		if err != nil {
 			continue
 		}
-		sent := services.ArticleSentimentFromFinbert(p.ArticleID, p.Symbol, res)
+		sent := services.ArticleSentimentFromFinbert(p.ArticleID, p.Symbol, res, inputMode)
 		if err := h.Store.UpsertSentiment(ctx, sent); err != nil {
 			continue
 		}

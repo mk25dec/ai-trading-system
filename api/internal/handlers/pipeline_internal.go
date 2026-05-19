@@ -259,18 +259,50 @@ func (h PipelineInternalHandler) RunSentimentBatch(w http.ResponseWriter, r *htt
 	}
 	processed := 0
 	var lastErr string
+
+	type pendingItem struct {
+		p         store.PendingSentimentRow
+		text      string
+		inputMode string
+	}
+	var batchItems []pendingItem
+	var finbertBatch []services.FinbertBatchItem
+
 	for _, p := range pending {
-		text := services.ExcerptForSentiment(p.Title, p.CleanedText, 1500)
+		text, inputMode := services.TextForFinBERT(p.Title, p.CleanedText)
 		if strings.TrimSpace(text) == "" {
 			lastErr = "empty text for sentiment"
 			continue
 		}
-		res, err := h.Finbert.AnalyzeFull(r.Context(), text)
+		id := p.ArticleID + ":" + p.Symbol
+		batchItems = append(batchItems, pendingItem{p: p, text: text, inputMode: inputMode})
+		finbertBatch = append(finbertBatch, services.FinbertBatchItem{ID: id, Text: text})
+	}
+
+	results := map[string]services.FinbertResult{}
+	if len(finbertBatch) > 1 {
+		var err error
+		results, err = h.Finbert.AnalyzeBatch(r.Context(), finbertBatch)
 		if err != nil {
 			lastErr = err.Error()
-			continue
+			results = nil
 		}
-		sent := services.ArticleSentimentFromFinbert(p.ArticleID, p.Symbol, res)
+	}
+
+	for _, item := range batchItems {
+		id := item.p.ArticleID + ":" + item.p.Symbol
+		var res services.FinbertResult
+		if fr, ok := results[id]; ok {
+			res = fr
+		} else {
+			var err error
+			res, err = h.Finbert.AnalyzeFull(r.Context(), item.text)
+			if err != nil {
+				lastErr = err.Error()
+				continue
+			}
+		}
+		sent := services.ArticleSentimentFromFinbert(item.p.ArticleID, item.p.Symbol, res, item.inputMode)
 		if err := h.Store.UpsertSentiment(r.Context(), sent); err != nil {
 			lastErr = err.Error()
 			continue

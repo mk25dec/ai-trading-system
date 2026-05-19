@@ -28,7 +28,10 @@ func SentimentRowsFromDetails(rows []store.SentimentDetailRow) []SentimentRow {
 	return out
 }
 
-func ArticleSentimentFromFinbert(articleID, symbol string, res FinbertResult) models.ArticleSentiment {
+func ArticleSentimentFromFinbert(articleID, symbol string, res FinbertResult, inputMode string) models.ArticleSentiment {
+	if inputMode == "" {
+		inputMode = "excerpt"
+	}
 	pp, pn, pneu := res.ProbPositive, res.ProbNegative, res.ProbNeutral
 	return models.ArticleSentiment{
 		ArticleID:      articleID,
@@ -40,6 +43,6 @@ func ArticleSentimentFromFinbert(articleID, symbol string, res FinbertResult) mo
 		ProbNegative:   &pn,
 		ProbNeutral:    &pneu,
 		ModelName:      "finbert",
-		InputMode:      "excerpt",
+		InputMode:      inputMode,
 	}
 }
