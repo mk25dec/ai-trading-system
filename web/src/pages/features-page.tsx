@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query"
 import { AlertTriangle, TrendingDown, TrendingUp } from "lucide-react"
 import { useMemo, useState } from "react"
 import { WorkspaceToolbar } from "@/components/workspace-toolbar"
+import { CategoryBreakdownTable } from "@/components/decision/category-breakdown-table"
 import { TraderKpiCards } from "@/components/decision/trader-kpi-cards"
 import { TraderOutlookTable } from "@/components/trader-outlook-table"
 import { RecommendationBadge } from "@/components/recommendation-badge"
@@ -141,6 +142,27 @@ export function FeaturesPage() {
             expanded={expanded}
             onToggle={(sym) => setExpanded((s) => (s === sym ? null : sym))}
             renderDetail={(row) => <FeaturesAnalystDetail row={row as FeatureRow} />}
+            emptyMessage={
+              workspaceId && !board.isLoading
+                ? "No feature data yet — add watchlist symbols on Research, then Get latest data."
+                : undefined
+            }
+          />
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/70 shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Score basis by category</CardTitle>
+          <CardDescription>
+            Research v2 category weights (my-research.md §5). Each cell is the factor on a 0–100 scale
+            (50 = neutral); the sub-line is model confidence. Em dash means not wired in the engine yet.
+            Σ contrib sums implemented categories using score × researchWeight × confidence.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="overflow-x-auto p-0">
+          <CategoryBreakdownTable
+            rows={rows}
             emptyMessage={
               workspaceId && !board.isLoading
                 ? "No feature data yet — add watchlist symbols on Research, then Get latest data."
