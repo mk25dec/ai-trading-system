@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import type { EChartsOption } from "echarts"
 import * as echarts from "echarts"
 import {
@@ -207,8 +207,9 @@ function buildChartOption(
         lineStyle: { opacity: 0 },
         stack: "confidence",
         symbol: "none",
-        connectNulls: true,
+        connectNulls: false,
         silent: true,
+        z: 1,
       },
       {
         name: "BandFill",
@@ -220,8 +221,9 @@ function buildChartOption(
           color: bullish ? "rgba(16, 185, 129, 0.14)" : "rgba(239, 68, 68, 0.14)",
         },
         symbol: "none",
-        connectNulls: true,
+        connectNulls: false,
         silent: true,
+        z: 1,
       },
       {
         name: "BandUpper",
@@ -229,8 +231,9 @@ function buildChartOption(
         data: upperData,
         lineStyle: { width: 1, type: "dotted", color: "rgba(148, 163, 184, 0.55)" },
         symbol: "none",
-        connectNulls: true,
+        connectNulls: false,
         silent: true,
+        z: 1,
       },
       {
         name: "Projected",
@@ -246,7 +249,8 @@ function buildChartOption(
           symbolSize: 8,
           data: outlook.anchors.map((a) => ({
             name: a.label,
-            coord: [a.index, a.price],
+            xAxis: a.index,
+            yAxis: a.price,
             value: `$${a.price.toFixed(2)}`,
             itemStyle: { color: projColor },
           })),
@@ -269,54 +273,107 @@ export function PriceOutlookChartDialog({
   name?: string
   outlook: PriceOutlookProjection
 }) {
-  const chartRef = useRef<HTMLDivElement>(null)
+  const chartRef = useRef<HTMLDivElement | null>(null)
   const chartInstance = useRef<echarts.ECharts | null>(null)
+  const resizeObserver = useRef<ResizeObserver | null>(null)
   const [chartReady, setChartReady] = useState(false)
+  const [chartError, setChartError] = useState<string | null>(null)
 
   const bullish = outlook.pBull3M >= 0.5
 
-  useLayoutEffect(() => {
-    if (!open) {
-      setChartReady(false)
-      chartInstance.current?.dispose()
-      chartInstance.current = null
-      return
-    }
+  const disposeChart = useCallback(() => {
+    resizeObserver.current?.disconnect()
+    resizeObserver.current = null
+    chartInstance.current?.dispose()
+    chartInstance.current = null
+    setChartReady(false)
+  }, [])
 
+  const mountChart = useCallback(() => {
     const el = chartRef.current
-    if (!el) return
+    if (!el) return false
 
-    let cancelled = false
-    const init = () => {
-      if (cancelled || !chartRef.current) return
-      const { clientWidth, clientHeight } = chartRef.current
-      if (clientWidth < 10 || clientHeight < 10) {
-        requestAnimationFrame(init)
-        return
-      }
+    const { clientWidth, clientHeight } = el
+    if (clientWidth < 10 || clientHeight < 10) return false
 
+    try {
       chartInstance.current?.dispose()
-      const chart = echarts.init(chartRef.current, undefined, { renderer: "canvas" })
+      const chart = echarts.init(el, undefined, { renderer: "canvas" })
       chartInstance.current = chart
       chart.setOption(buildChartOption(outlook, symbol, bullish), { notMerge: true })
       chart.resize()
+      setChartError(null)
       setChartReady(true)
+      return true
+    } catch (err) {
+      disposeChart()
+      setChartError(err instanceof Error ? err.message : "Chart failed to render")
+      return false
+    }
+  }, [bullish, disposeChart, outlook, symbol])
+
+  const scheduleMount = useCallback(() => {
+    let cancelled = false
+    let attempts = 0
+    const maxAttempts = 60
+
+    const tryMount = () => {
+      if (cancelled) return
+      attempts += 1
+      if (mountChart()) return
+      if (attempts < maxAttempts) {
+        requestAnimationFrame(tryMount)
+      } else {
+        setChartError("Chart container has no size — try resizing the window.")
+      }
     }
 
-    requestAnimationFrame(init)
-
-    const ro = new ResizeObserver(() => {
-      chartInstance.current?.resize()
-    })
-    ro.observe(el)
-
+    requestAnimationFrame(tryMount)
     return () => {
       cancelled = true
-      ro.disconnect()
-      chartInstance.current?.dispose()
-      chartInstance.current = null
     }
-  }, [open, outlook, symbol, bullish])
+  }, [mountChart])
+
+  const chartContainerRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      chartRef.current = node
+      if (!node) {
+        disposeChart()
+        return
+      }
+      if (!open) return
+
+      resizeObserver.current?.disconnect()
+      resizeObserver.current = new ResizeObserver(() => {
+        if (!chartInstance.current) {
+          mountChart()
+          return
+        }
+        chartInstance.current.resize()
+      })
+      resizeObserver.current.observe(node)
+    },
+    [disposeChart, mountChart, open],
+  )
+
+  useEffect(() => {
+    if (!open) {
+      setChartError(null)
+      disposeChart()
+      return
+    }
+
+    const cancelRaf = scheduleMount()
+    const t = window.setTimeout(() => {
+      mountChart()
+    }, 120)
+
+    return () => {
+      cancelRaf()
+      window.clearTimeout(t)
+      disposeChart()
+    }
+  }, [disposeChart, mountChart, open, scheduleMount])
 
   const pct =
     ((outlook.projectedPrice1M - outlook.lastPrice) / outlook.lastPrice) * 100
@@ -338,10 +395,18 @@ export function PriceOutlookChartDialog({
         <div
           className={cn(
             "relative h-[400px] w-full overflow-hidden rounded-lg border border-border/70 bg-card",
-            !chartReady && "animate-pulse bg-muted/30",
+            open && !chartReady && !chartError && "animate-pulse bg-muted/30",
           )}
         >
-          {open ? <div ref={chartRef} className="absolute inset-0 h-full w-full min-h-[320px]" /> : null}
+          <div
+            ref={chartContainerRef}
+            className="absolute inset-0 h-full w-full min-h-[320px]"
+          />
+          {chartError ? (
+            <p className="absolute inset-0 flex items-center justify-center px-4 text-center text-sm text-destructive">
+              {chartError}
+            </p>
+          ) : null}
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-3 text-xs">

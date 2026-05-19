@@ -72,7 +72,7 @@ func Load() (Config, error) {
 		FinbertURL:      stringsTrimSuffix(envOr("FINBERT_URL", envOr("FINBERT_API_URL", "")), "/"),
 		FinbertAPIKey:   os.Getenv("FINBERT_API_KEY"),
 		AlpacaDataURL:    stringsTrimSuffix(envOr("ALPACA_DATA_URL", "https://data.alpaca.markets/v2"), "/"),
-		AlpacaTradingURL: stringsTrimSuffix(envOr("ALPACA_TRADING_URL", "https://api.alpaca.markets/v2"), "/"),
+		AlpacaTradingURL: stringsTrimSuffix(defaultAlpacaTradingURL(), "/"),
 		AlpacaDataFeed:   envOr("ALPACA_DATA_FEED", "iex"),
 		AlpacaAPIKey:    os.Getenv("ALPACA_API_KEY"),
 		AlpacaAPISecret: os.Getenv("ALPACA_API_SECRET"),
@@ -85,6 +85,17 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// defaultAlpacaTradingURL picks paper vs live trading API from key prefix when unset.
+func defaultAlpacaTradingURL() string {
+	if v := os.Getenv("ALPACA_TRADING_URL"); v != "" {
+		return v
+	}
+	if strings.HasPrefix(os.Getenv("ALPACA_API_KEY"), "PK") {
+		return "https://paper-api.alpaca.markets/v2"
+	}
+	return "https://api.alpaca.markets/v2"
 }
 
 func stringsTrimSuffix(s, suffix string) string {

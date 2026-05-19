@@ -23,6 +23,7 @@ Deploy this repo as a **Docker Compose** resource in Coolify.
 | `DUCKDB_PATH` | no | Default `/data/analytics.duckdb` — mount persistent storage on `api` at `/data` |
 | `ALPACA_API_KEY` | yes (Research/market data) | Alpaca **API Key ID** (paper or live) |
 | `ALPACA_API_SECRET` | yes (Research/market data) | Alpaca **Secret Key** |
+| `ALPACA_TRADING_URL` | no | Paper keys (`PK…`) → `https://paper-api.alpaca.markets/v2`. Live keys (`AK…`) → `https://api.alpaca.markets/v2`. Auto-detected if unset. |
 | `ALPACA_DATA_FEED` | no | `iex` for free/paper market data (default). Use `sip` only with paid SIP subscription. |
 | `ALPACA_DATA_URL` | no | `https://data.alpaca.markets/v2` |
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -38,5 +39,63 @@ func TestFetchDailyBars_usesIEXFeedAndPaginates(t *testing.T) {
 	}
 	if requestCount != 2 {
 		t.Fatalf("expected 2 HTTP requests (pagination), got %d", requestCount)
+	}
+}
+
+func TestTradingBaseURLs(t *testing.T) {
+	t.Parallel()
+	paper := &AlpacaClient{Key: "PKTEST"}
+	bases := paper.tradingBaseURLs()
+	if bases[0] != "https://paper-api.alpaca.markets/v2" {
+		t.Fatalf("paper key default base: got %v", bases)
+	}
+
+	live := &AlpacaClient{Key: "AKTEST"}
+	bases = live.tradingBaseURLs()
+	if bases[0] != "https://api.alpaca.markets/v2" {
+		t.Fatalf("live key default base: got %v", bases)
+	}
+
+	custom := &AlpacaClient{Key: "PKTEST", TradingURL: "https://custom.example/v2"}
+	bases = custom.tradingBaseURLs()
+	if bases[0] != "https://custom.example/v2" {
+		t.Fatalf("explicit URL should be first: got %v", bases)
+	}
+	if !strings.Contains(strings.Join(bases, ","), "paper-api") {
+		t.Fatalf("expected paper-api fallback: %v", bases)
+	}
+}
+
+func TestFetchAssets_triesNextBaseOn401(t *testing.T) {
+	attempts := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		if strings.Contains(r.URL.Path, "/fail/") {
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(`{"code":40110000,"message":"request is not authorized"}`))
+			return
+		}
+		_, _ = w.Write([]byte(`[{"symbol":"AAPL","name":"Apple Inc","exchange":"NASDAQ","class":"us_equity","status":"active"}]`))
+	}))
+	defer srv.Close()
+
+	client := &AlpacaClient{
+		Key:    "PKTEST",
+		Secret: "secret",
+		tradingBasesTestOverride: []string{
+			srv.URL + "/fail",
+			srv.URL + "/ok",
+		},
+	}
+
+	assets, err := client.FetchAssets(context.Background(), []string{"AAPL"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if assets["AAPL"].Name != "Apple Inc" {
+		t.Fatalf("got %+v", assets["AAPL"])
+	}
+	if attempts != 2 {
+		t.Fatalf("expected 2 HTTP attempts, got %d", attempts)
 	}
 }

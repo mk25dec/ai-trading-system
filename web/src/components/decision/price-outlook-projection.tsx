@@ -219,13 +219,15 @@ export function PriceOutlookProjection({
         </Tooltip>
       </TooltipProvider>
 
-      <PriceOutlookChartDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        symbol={symbol}
-        name={name}
-        outlook={outlook}
-      />
+      {dialogOpen ? (
+        <PriceOutlookChartDialog
+          open
+          onOpenChange={setDialogOpen}
+          symbol={symbol}
+          name={name}
+          outlook={outlook}
+        />
+      ) : null}
     </>
   )
 }

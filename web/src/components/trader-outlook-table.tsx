@@ -6,6 +6,7 @@ import { PriceOutlookProjection } from "@/components/decision/price-outlook-proj
 import { ScoreGauge } from "@/components/decision/score-gauge"
 import { HorizonOutlookBadge } from "@/components/horizon-outlook-badge"
 import { RecommendationBadge } from "@/components/recommendation-badge"
+import { TableColumnHeader } from "@/components/table-column-header"
 import {
   Table,
   TableBody,
@@ -14,6 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { traderOutlookColumnGuides } from "@/lib/column-guides"
 import { alignmentLabel, resolveDecision, signalSubline, stanceLabel } from "@/lib/decision-engine"
 import {
   actionAccent,
@@ -43,16 +45,25 @@ export function TraderOutlookTable({
       <TableHeader>
         <TableRow className="border-b bg-muted/30 hover:bg-muted/30">
           <TableHead className="w-8" />
-          <TableHead className="min-w-[220px]">Security · quote</TableHead>
-          <TableHead className="w-[72px]">Chart</TableHead>
-          <TableHead className="min-w-[140px]">Price outlook</TableHead>
-          <TableHead>Signal</TableHead>
-          <TableHead className="text-right">Score</TableHead>
-          <TableHead className="text-center">Horizons</TableHead>
-          <TableHead>News</TableHead>
-          <TableHead>Risk</TableHead>
-          <TableHead>Alignment</TableHead>
-          <TableHead className="min-w-[120px]">Driver</TableHead>
+          <TableColumnHeader
+            guide={traderOutlookColumnGuides.security}
+            className="min-w-[220px]"
+          />
+          <TableColumnHeader guide={traderOutlookColumnGuides.chart} className="w-[72px]" />
+          <TableColumnHeader
+            guide={traderOutlookColumnGuides.priceOutlook}
+            className="min-w-[140px]"
+          />
+          <TableColumnHeader guide={traderOutlookColumnGuides.signal} />
+          <TableColumnHeader guide={traderOutlookColumnGuides.score} align="right" />
+          <TableColumnHeader guide={traderOutlookColumnGuides.horizons} align="center" />
+          <TableColumnHeader guide={traderOutlookColumnGuides.news} />
+          <TableColumnHeader guide={traderOutlookColumnGuides.risk} />
+          <TableColumnHeader guide={traderOutlookColumnGuides.alignment} />
+          <TableColumnHeader
+            guide={traderOutlookColumnGuides.driver}
+            className="min-w-[120px]"
+          />
         </TableRow>
       </TableHeader>
       <TableBody>

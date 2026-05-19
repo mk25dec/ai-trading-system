@@ -1,12 +1,13 @@
 import { Badge } from "@/components/ui/badge"
+import { TableColumnHeader } from "@/components/table-column-header"
 import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { marketDataColumnGuides } from "@/lib/column-guides"
 import { formatPct, pctClass, rsiLabel } from "@/lib/feature-metrics"
 import type { SymbolMarketDetail } from "@/lib/pipeline-api"
 import { formatCompanyName, formatExchange, formatUsd, formatVolume } from "@/lib/stock-quote"
@@ -19,23 +20,23 @@ export function MarketDataTable({ rows }: { rows: SymbolMarketDetail[] }) {
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/30 hover:bg-muted/30">
-            <TableHead className="min-w-[88px]">Symbol</TableHead>
-            <TableHead className="min-w-[140px]">Company</TableHead>
-            <TableHead className="w-[72px]">Exchange</TableHead>
-            <TableHead className="text-right">Last</TableHead>
-            <TableHead className="text-right">Open</TableHead>
-            <TableHead className="text-right">High</TableHead>
-            <TableHead className="text-right">Low</TableHead>
-            <TableHead className="text-right">Prev</TableHead>
-            <TableHead className="text-right">24h</TableHead>
-            <TableHead className="text-right">5d</TableHead>
-            <TableHead className="text-right">Vol</TableHead>
-            <TableHead className="text-right">RSI</TableHead>
-            <TableHead className="text-right">52w H</TableHead>
-            <TableHead className="text-right">52w L</TableHead>
-            <TableHead className="text-right">SMA20</TableHead>
-            <TableHead>Bar</TableHead>
-            <TableHead>Status</TableHead>
+            <TableColumnHeader guide={marketDataColumnGuides.symbol} className="min-w-[88px]" />
+            <TableColumnHeader guide={marketDataColumnGuides.company} className="min-w-[140px]" />
+            <TableColumnHeader guide={marketDataColumnGuides.exchange} className="w-[72px]" />
+            <TableColumnHeader guide={marketDataColumnGuides.last} align="right" />
+            <TableColumnHeader guide={marketDataColumnGuides.open} align="right" />
+            <TableColumnHeader guide={marketDataColumnGuides.high} align="right" />
+            <TableColumnHeader guide={marketDataColumnGuides.low} align="right" />
+            <TableColumnHeader guide={marketDataColumnGuides.prev} align="right" />
+            <TableColumnHeader guide={marketDataColumnGuides.change24h} align="right" />
+            <TableColumnHeader guide={marketDataColumnGuides.change5d} align="right" />
+            <TableColumnHeader guide={marketDataColumnGuides.vol} align="right" />
+            <TableColumnHeader guide={marketDataColumnGuides.rsi} align="right" />
+            <TableColumnHeader guide={marketDataColumnGuides.high52w} align="right" />
+            <TableColumnHeader guide={marketDataColumnGuides.low52w} align="right" />
+            <TableColumnHeader guide={marketDataColumnGuides.sma20} align="right" />
+            <TableColumnHeader guide={marketDataColumnGuides.bar} />
+            <TableColumnHeader guide={marketDataColumnGuides.status} />
           </TableRow>
         </TableHeader>
         <TableBody>

@@ -20,6 +20,9 @@ type AlpacaClient struct {
 	Key        string
 	Secret     string
 	Client     *http.Client
+
+	// tradingBasesTestOverride, when non-empty, replaces tradingBaseURLs (tests only).
+	tradingBasesTestOverride []string
 }
 
 // AlpacaAsset is metadata from the trading API /v2/assets.
@@ -155,6 +158,74 @@ func (a *AlpacaClient) FetchDailyBars(ctx context.Context, symbols []string, day
 	return all, nil
 }
 
+// tradingBaseURLs returns Alpaca trading API bases to try (paper vs live).
+// Paper API keys start with PK and must use paper-api; live keys use api.alpaca.markets.
+func (a *AlpacaClient) tradingBaseURLs() []string {
+	if len(a.tradingBasesTestOverride) > 0 {
+		return a.tradingBasesTestOverride
+	}
+	seen := map[string]bool{}
+	var urls []string
+	add := func(u string) {
+		u = strings.TrimSuffix(strings.TrimSpace(u), "/")
+		if u == "" || seen[u] {
+			return
+		}
+		seen[u] = true
+		urls = append(urls, u)
+	}
+
+	explicit := strings.TrimSuffix(strings.TrimSpace(a.TradingURL), "/")
+	if explicit != "" {
+		add(explicit)
+	}
+	if strings.HasPrefix(a.Key, "PK") {
+		add("https://paper-api.alpaca.markets/v2")
+		add("https://api.alpaca.markets/v2")
+	} else {
+		add("https://api.alpaca.markets/v2")
+		add("https://paper-api.alpaca.markets/v2")
+	}
+	if len(urls) == 0 {
+		return []string{"https://api.alpaca.markets/v2"}
+	}
+	return urls
+}
+
+func (a *AlpacaClient) fetchAssetsAt(ctx context.Context, base string, chunk []string) ([]alpacaAssetJSON, error) {
+	q := url.Values{}
+	q.Set("status", "active")
+	q.Set("symbols", strings.Join(chunk, ","))
+	u := fmt.Sprintf("%s/assets?%s", strings.TrimSuffix(base, "/"), q.Encode())
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("APCA-API-KEY-ID", a.Key)
+	req.Header.Set("APCA-API-SECRET-KEY", a.Secret)
+
+	resp, err := a.Client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	raw, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+
+	msg := strings.TrimSpace(string(raw))
+	if resp.StatusCode == http.StatusOK {
+		var items []alpacaAssetJSON
+		if err := json.Unmarshal(raw, &items); err != nil {
+			return nil, err
+		}
+		return items, nil
+	}
+	if resp.StatusCode == http.StatusUnauthorized {
+		return nil, fmt.Errorf("alpaca assets 401: %s", msg)
+	}
+	return nil, fmt.Errorf("alpaca assets %d: %s", resp.StatusCode, msg)
+}
+
 // FetchAssets loads symbol metadata from Alpaca trading API (batch by symbol list).
 func (a *AlpacaClient) FetchAssets(ctx context.Context, symbols []string) (map[string]AlpacaAsset, error) {
 	if a.Key == "" || a.Secret == "" {
@@ -166,44 +237,39 @@ func (a *AlpacaClient) FetchAssets(ctx context.Context, symbols []string) (map[s
 	if a.Client == nil {
 		a.Client = &http.Client{Timeout: 90 * time.Second}
 	}
-	base := strings.TrimSuffix(a.TradingURL, "/")
-	if base == "" {
-		base = "https://api.alpaca.markets/v2"
-	}
 
+	bases := a.tradingBaseURLs()
 	out := make(map[string]AlpacaAsset, len(symbols))
-	// Alpaca supports filter by symbols query on /assets
+
 	for i := 0; i < len(symbols); i += 50 {
 		end := i + 50
 		if end > len(symbols) {
 			end = len(symbols)
 		}
 		chunk := symbols[i:end]
-		q := url.Values{}
-		q.Set("status", "active")
-		q.Set("symbols", strings.Join(chunk, ","))
-		u := fmt.Sprintf("%s/assets?%s", base, q.Encode())
 
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-		if err != nil {
-			return nil, err
-		}
-		req.Header.Set("APCA-API-KEY-ID", a.Key)
-		req.Header.Set("APCA-API-SECRET-KEY", a.Secret)
-
-		resp, err := a.Client.Do(req)
-		if err != nil {
-			return nil, err
-		}
-		raw, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			return nil, fmt.Errorf("alpaca assets %d: %s", resp.StatusCode, strings.TrimSpace(string(raw)))
-		}
 		var items []alpacaAssetJSON
-		if err := json.Unmarshal(raw, &items); err != nil {
-			return nil, err
+		var lastErr error
+		for _, base := range bases {
+			got, err := a.fetchAssetsAt(ctx, base, chunk)
+			if err == nil {
+				items = got
+				lastErr = nil
+				break
+			}
+			lastErr = err
+			if !strings.Contains(err.Error(), "401") {
+				return nil, err
+			}
 		}
+		if lastErr != nil {
+			hint := "check ALPACA_API_KEY and ALPACA_API_SECRET"
+			if strings.HasPrefix(a.Key, "PK") {
+				hint = "paper keys (PK…) need ALPACA_TRADING_URL=https://paper-api.alpaca.markets/v2 — live keys use https://api.alpaca.markets/v2"
+			}
+			return nil, fmt.Errorf("%w (%s)", lastErr, hint)
+		}
+
 		for _, it := range items {
 			if it.Symbol == "" || it.Status != "active" {
 				continue
