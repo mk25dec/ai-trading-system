@@ -47,7 +47,101 @@ FinalScore(T) = Σᵢ (CategoryScoreᵢ(T) × CategoryWeightᵢ × Confidenceᵢ
 | Price projection P(up) | `logistic(composite)×0.5 + horizonPrior×0.35 + conf×0.1 + momentum` | 63d history + 21d path |
 | Multi-horizon path | `P_T = P₀ × (1 + edge×σ×√(days/252) + trend)` per anchor T ∈ {3D,1W,2W,3W,1M} | Grey bands on chart; ECharts popup |
 | Zero-data policy | No market signal **and** no news → composite **0**, display **—**, not 50 | `hasScorableInputs` + `categorySignalStrength` |
-| Outlook buckets | ≥78 Strong buy · ≥62 Buy · ≥45 Watch · ≥32 Sell · under 32 Avoid | Applied to 0–100 scores |
+| Outlook buckets | ≥78 Strong buy · ≥62 Buy · ≥45 Watch · ≥32 Sell · under 32 Avoid | Applied to 0–100 horizon/composite scores |
+
+### 1.5 Trader signal table (outlook vs trade action)
+
+The **Trader outlook** column shows two related outputs from `ComputeDecision` in `decision_engine.go`:
+
+| UI label | API field | Meaning |
+|----------|-----------|---------|
+| **Signal badge** (Buy / Watch / Sell / Avoid) | `decision.primaryAction` → `recommendation` | **Trade posture** — whether to add risk, reduce, or wait. Never auto-executes. |
+| **Subline** (`Outlook: …`) | `decision.primaryOutlook` | **Score bucket label** from composite 0–100 after risk penalty. |
+
+They are **not always the same**. Example: composite 42 with outlook **Sell** but badge **Watch** when confidence is below the trade gate.
+
+#### Composite score → outlook label (`scoreToOutlook`)
+
+| Composite (0–100) | `outlook` key | `primaryOutlook` label |
+|-------------------|---------------|-------------------------|
+| ≥ 78 | `strong_buy` | Strong buy |
+| 62 – 77.9 | `buy` | Buy |
+| **45 – 61.9** | **`watch`** | **Watch** |
+| 32 – 44.9 | `sell` | Sell |
+| &lt; 32 | `avoid` | Avoid |
+
+Formula (implemented):
+
+```
+composite = 0.45×Score₁W + 0.30×Score₃D + 0.25×Score₁M + alignmentBonus − riskPenalty
+composite = clamp(composite, 0, 100)
+```
+
+| Adjustment | Value |
+|------------|--------|
+| Alignment bonus | +4 aligned bullish · −4 aligned bearish · −2 divergent |
+| Risk penalty | −8 high · −4 medium · 0 low |
+
+#### Outlook → trade action (`outlookToAction`)
+
+Maps outlook to `primaryAction` (`buy_candidate`, `sell_candidate`, `avoid`, `watch`):
+
+| Condition | Trade action forced to |
+|-----------|-------------------------|
+| **Confidence &lt; 35%** | **`watch`** (no Buy/Sell even if outlook is Buy/Sell) |
+| Horizons **conflict** and outlook not sell/avoid | `watch` |
+| Outlook buy/strong_buy but **high risk** and composite &lt; 70 | `watch` |
+| Outlook `strong_buy` / `buy` | `buy_candidate` |
+| Outlook `sell` | `sell_candidate` |
+| Outlook `avoid` | `avoid` |
+| Default | `watch` |
+
+**Confidence** = average of 3D / 1W / 1M horizon confidences, then ×0.75 if no market features, ×0.85 if no news in 24h/1h (floor 15%, cap 95%). Market-only symbols often land **~17–22%**, so the badge stays **Watch** until news coverage improves.
+
+#### Override rules (`applyDecisionOverrides`) — can promote/demote after the table above
+
+| Trigger | Trade action | Outlook | Composite tweak |
+|---------|--------------|---------|-----------------|
+| Negative spike + 24h sentiment &lt; −0.35 | `avoid` | Avoid | cap ≤ 28 |
+| Negative spike + 1h sentiment &lt; −0.45 | `avoid` | Avoid | cap ≤ 30 |
+| Positive spike + 1h sentiment &gt; 0.35 and composite ≥ 50 | `buy_candidate` | Buy | floor ≥ 64 |
+| 24h price &gt; **+2.5%** and 24h sentiment &gt; **+0.3** | `buy_candidate` | Buy | floor ≥ 65 |
+| 24h price &lt; **−2%** and 24h sentiment &lt; **−0.35** | `sell_candidate` | Sell | cap ≤ 38 |
+| 24h sentiment &lt; −0.5, no market | `avoid` | Avoid | cap ≤ 25 |
+
+Overrides run **after** `outlookToAction`. A strong mover with **weak or missing news** (e.g. +28% price, sentiment 0.1) stays **Watch** unless sentiment clears the override thresholds.
+
+#### Debug: why your watchlist can all show Watch (May 2026 example)
+
+| Symbol | Composite | Outlook bucket | Typical conf (market-heavy) | Badge | Why |
+|--------|-----------|----------------|----------------------------|-------|-----|
+| HIVE | ~53 | Watch (45–61) | ~20% | Watch | Mid score band **and** conf &lt; 35% |
+| ING | ~46 | Watch | ~21% | Watch | Same |
+| AAPL | ~46 | Watch | ~17% | Watch | RSI elevated → risk medium; still mid band |
+| RRR | ~45 | Watch | ~21% | Watch | Same |
+
+**Price outlook P(up)** (chart) is a **separate model** (`price-outlook.ts`) — it can show 66% up while the **trade badge** stays Watch because the decision engine requires composite ≥ 62 **and** sufficient confidence for Buy.
+
+#### Positions (holdings) — not in engine today
+
+| Question | Current behavior |
+|----------|------------------|
+| Is there a portfolio / position size input? | **No** — signals are per symbol only. |
+| Does signal change if you already own shares? | **No** — zero shares vs open position get the **same** `primaryAction` and `primaryOutlook`. |
+| What should happen (v2 target)? | Use a **position-aware** layer on top of the same composite: |
+
+| Position | Outlook | Suggested trade posture (future) |
+|----------|---------|----------------------------------|
+| Flat (0) | Buy | Buy candidate — enter |
+| Flat | Watch | Wait — no entry |
+| Flat | Sell / Avoid | Avoid new long |
+| Long | Buy | Hold / add (size by confidence) |
+| Long | Watch | Hold — monitor |
+| Long | Sell | Trim / exit candidate |
+| Long | Avoid | Exit candidate |
+| Short | (not supported) | — |
+
+Until positions are stored (workspace holdings table + API), treat every row as **flat** research: the badge means “if you were deciding from scratch today,” not “adjust your current lot.”
 
 ---
 

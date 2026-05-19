@@ -126,4 +126,32 @@ func TestNewsStance_noNews(t *testing.T) {
 	}
 }
 
+func TestOutlookToAction_lowConfidenceForcesWatch(t *testing.T) {
+	// Market-only watchlist: composite can be directional but trade action stays watch.
+	mf := &models.MarketFeatures{PriceChange24h: ptrFloat(28.33), PriceChange5d: ptrFloat(30), RSI: ptrFloat(72)}
+	d := ComputeDecision("HIVE", mf, &models.NewsFeatures{NewsCount24h: 1, AvgSentiment24h: ptrFloat(0.1)})
+	if d.CompositeScore < 45 || d.CompositeScore >= 62 {
+		t.Fatalf("expected mid-band composite, got %.1f", d.CompositeScore)
+	}
+	if d.PrimaryOutlook != "Watch" {
+		t.Fatalf("expected Watch outlook in 45–61 band, got %s", d.PrimaryOutlook)
+	}
+	if d.PrimaryAction != "watch" {
+		t.Fatalf("expected watch action when conf < 0.35, got %s (conf=%.2f)", d.PrimaryAction, d.Confidence)
+	}
+	if d.Confidence >= 0.35 {
+		t.Fatalf("expected suppressed confidence without news coverage, got %.2f", d.Confidence)
+	}
+}
+
+func TestApplyOverrides_buyOnStrongMomentumAndSentiment(t *testing.T) {
+	ch, sent := 28.0, 0.35
+	mf := &models.MarketFeatures{PriceChange24h: &ch, RSI: ptrFloat(72)}
+	nf := &models.NewsFeatures{NewsCount24h: 5, AvgSentiment24h: &sent, AvgSentiment1h: ptrFloat(0.4)}
+	d := ComputeDecision("HIVE", mf, nf)
+	if d.PrimaryAction != "buy_candidate" {
+		t.Fatalf("expected buy_candidate on momentum+sentiment override, got %s", d.PrimaryAction)
+	}
+}
+
 func ptrFloat(v float64) *float64 { return &v }

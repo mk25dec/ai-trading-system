@@ -208,13 +208,21 @@ export function stanceLabel(stance: string): string {
   }
 }
 
-/** When trade action is cautious but composite outlook is directional. */
+/** Explains outlook vs trade action (they can diverge when confidence is low). */
 export function signalSubline(decision: DecisionView): string {
   const outlook = decision.primaryOutlook
+  const parts = [`Outlook: ${outlook}`]
   if (decision.primaryAction === "watch" && outlook !== "Watch") {
-    return `Outlook: ${outlook} · cautious`
+    parts.push("trade gated")
   }
-  return `Outlook: ${outlook}`
+  if (
+    decision.primaryAction === "watch" &&
+    decision.confidence < 0.35 &&
+    decision.compositeScore > 0
+  ) {
+    parts.push(`conf ${(decision.confidence * 100).toFixed(0)}%`)
+  }
+  return parts.join(" · ")
 }
 
 export function priceTrendLabel(trend: string): string {

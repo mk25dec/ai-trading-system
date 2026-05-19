@@ -201,6 +201,7 @@ func (h PipelinePublicHandler) SetWatchlist(w http.ResponseWriter, r *http.Reque
 		WriteError(w, http.StatusInternalServerError, "save failed")
 		return
 	}
+	_ = services.EnrichSymbolsFromAlpacaIfNeeded(r.Context(), h.Store, h.Alpaca, symbols)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -285,6 +286,7 @@ func (h PipelinePublicHandler) ListWorkspaceSymbols(w http.ResponseWriter, r *ht
 		WriteError(w, http.StatusInternalServerError, "watchlist failed")
 		return
 	}
+	_ = services.EnrichSymbolsFromAlpacaIfNeeded(r.Context(), h.Store, h.Alpaca, symbols)
 	items, err := h.Store.ListSymbolMarketDetailForSymbols(r.Context(), symbols)
 	if err != nil {
 		WriteError(w, http.StatusInternalServerError, "query failed")

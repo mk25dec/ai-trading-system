@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/joeydekruis/ai-trading-system/api/internal/catalog"
 	"github.com/joeydekruis/ai-trading-system/api/internal/models"
 )
 
@@ -868,7 +869,7 @@ func (s *PipelineStore) EnsureSymbols(ctx context.Context, symbols []string) err
 		}
 		_, err := s.pool.Exec(ctx, `
 			INSERT INTO symbols (symbol, name, is_active, updated_at)
-			VALUES ($1, $1, TRUE, NOW())
+			VALUES ($1, '', TRUE, NOW())
 			ON CONFLICT (symbol) DO UPDATE SET is_active = TRUE, updated_at = NOW()`,
 			sym)
 		if err != nil {
@@ -894,8 +895,8 @@ func (s *PipelineStore) SymbolMeta(ctx context.Context, symbol string) (name str
 	if err != nil {
 		return symbol, nil, "equity", err
 	}
-	if name == "" {
-		name = symbol
+	if catalog.IsPlaceholderSymbolName(symbol, name) {
+		name = ""
 	}
 	if class == "" {
 		class = "equity"
@@ -903,16 +904,51 @@ func (s *PipelineStore) SymbolMeta(ctx context.Context, symbol string) (name str
 	return name, ex, class, nil
 }
 
+// SymbolsNeedingCatalogEnrichment returns tickers missing a real company name or exchange.
+func (s *PipelineStore) SymbolsNeedingCatalogEnrichment(ctx context.Context, symbols []string) ([]string, error) {
+	if len(symbols) == 0 {
+		return nil, nil
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT symbol FROM symbols
+		WHERE symbol = ANY($1)
+		  AND is_active
+		  AND (
+		    exchange IS NULL OR TRIM(exchange) = ''
+		    OR TRIM(name) = ''
+		    OR UPPER(TRIM(name)) = UPPER(symbol)
+		  )`, symbols)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var sym string
+		if err := rows.Scan(&sym); err != nil {
+			return nil, err
+		}
+		out = append(out, sym)
+	}
+	return out, rows.Err()
+}
+
 // UpsertSymbolCatalog updates symbol metadata from Alpaca asset lookup.
 func (s *PipelineStore) UpsertSymbolCatalog(ctx context.Context, symbol, name string, exchange *string, assetClass string) error {
 	if assetClass == "" {
 		assetClass = "equity"
 	}
+	name = catalog.SanitizeName(symbol, name)
 	_, err := s.pool.Exec(ctx, `
 		INSERT INTO symbols (symbol, name, exchange, asset_class, is_active, updated_at)
 		VALUES ($1, $2, $3, $4, TRUE, NOW())
 		ON CONFLICT (symbol) DO UPDATE SET
-			name = CASE WHEN EXCLUDED.name <> '' THEN EXCLUDED.name ELSE symbols.name END,
+			name = CASE
+				WHEN EXCLUDED.name <> '' AND UPPER(TRIM(EXCLUDED.name)) <> UPPER(symbols.symbol)
+				THEN EXCLUDED.name
+				WHEN UPPER(TRIM(symbols.name)) = UPPER(symbols.symbol) THEN ''
+				ELSE symbols.name
+			END,
 			exchange = COALESCE(EXCLUDED.exchange, symbols.exchange),
 			asset_class = EXCLUDED.asset_class,
 			updated_at = NOW()`,
@@ -999,6 +1035,7 @@ func (s *PipelineStore) ListSymbolMarketDetailForSymbols(ctx context.Context, sy
 			return nil, err
 		}
 		d.Exchange = ex
+		d.Name = catalog.SanitizeName(d.Symbol, d.Name)
 		list = append(list, d)
 	}
 	return list, rows.Err()

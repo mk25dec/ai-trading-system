@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/table"
 import { formatPct, pctClass, rsiLabel } from "@/lib/feature-metrics"
 import type { SymbolMarketDetail } from "@/lib/pipeline-api"
-import { formatExchange, formatUsd, formatVolume } from "@/lib/stock-quote"
+import { formatCompanyName, formatExchange, formatUsd, formatVolume } from "@/lib/stock-quote"
 import { cn } from "@/lib/utils"
 import { formatDateTime } from "@/hooks/use-workspace"
 
@@ -54,15 +54,28 @@ function MarketDataRow({ row }: { row: SymbolMarketDetail }) {
     Date.now() - new Date(row.latestCandleAt).getTime() > 3 * 24 * 3600 * 1000
   const rsi = row.rsi
   const rsiHint = rsiLabel(rsi)
+  const company = formatCompanyName(row.symbol, row.name)
+  const exchange = formatExchange(row.exchange)
 
   return (
     <TableRow className="hover:bg-muted/20">
       <TableCell className="font-mono font-semibold">{row.symbol}</TableCell>
-      <TableCell className="max-w-[160px] truncate text-sm" title={row.name}>
-        {row.name}
+      <TableCell
+        className={cn(
+          "max-w-[180px] truncate text-sm",
+          company === "N/A" && "italic text-muted-foreground",
+        )}
+        title={company === "N/A" ? undefined : company}
+      >
+        {company}
       </TableCell>
-      <TableCell className="text-xs font-semibold uppercase text-muted-foreground">
-        {formatExchange(row.exchange ?? null)}
+      <TableCell
+        className={cn(
+          "text-xs font-semibold uppercase",
+          exchange === "N/A" ? "text-muted-foreground" : "text-primary",
+        )}
+      >
+        {exchange}
       </TableCell>
       <TableCell className="text-right font-mono font-semibold tabular-nums">
         {formatUsd(row.lastClose)}

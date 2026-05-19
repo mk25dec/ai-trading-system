@@ -48,6 +48,7 @@ func (h ResearchHandler) GetBoard(w http.ResponseWriter, r *http.Request) {
 			symbols = append(symbols, e.Symbol)
 		}
 	}
+	_ = services.EnrichSymbolsFromAlpacaIfNeeded(r.Context(), h.Store, h.Alpaca, symbols)
 
 	storedSignals, _ := h.Store.LatestSignalsBySymbol(r.Context(), workspaceID)
 	rows := make([]models.ResearchStockRow, 0, len(symbols))
@@ -157,7 +158,7 @@ func (h ResearchHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 				result.CandlesInserted = n
 			}
 		}
-		if err := services.EnrichSymbolsFromAlpaca(r.Context(), h.Store, h.Alpaca, symbols); err != nil {
+		if err := services.EnrichSymbolsFromAlpacaIfNeeded(r.Context(), h.Store, h.Alpaca, symbols); err != nil {
 			errs = append(errs, "alpaca assets: "+err.Error())
 		}
 	} else {
