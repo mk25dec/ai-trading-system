@@ -13,6 +13,10 @@ type ResearchHeadline struct {
 type ResearchStockRow struct {
 	Symbol         string            `json:"symbol"`
 	Name           string            `json:"name"`
+	Exchange       *string           `json:"exchange,omitempty"`
+	AssetClass     string            `json:"assetClass,omitempty"`
+	DayHigh        *float64          `json:"dayHigh,omitempty"`
+	DayLow         *float64          `json:"dayLow,omitempty"`
 	DataStatus     string            `json:"dataStatus,omitempty"` // "ready" | "no_market_data"
 	Recommendation string            `json:"recommendation"`
 	Confidence     float64           `json:"confidence"`

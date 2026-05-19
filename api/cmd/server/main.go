@@ -168,10 +168,11 @@ func registerAPIRoutes(r chi.Router, cfg config.Config, pool *pgxpool.Pool) {
 	}
 
 	alpacaClient := &services.AlpacaClient{
-		DataURL:  cfg.AlpacaDataURL,
-		DataFeed: cfg.AlpacaDataFeed,
-		Key:      cfg.AlpacaAPIKey,
-		Secret:   cfg.AlpacaAPISecret,
+		DataURL:    cfg.AlpacaDataURL,
+		TradingURL: cfg.AlpacaTradingURL,
+		DataFeed:   cfg.AlpacaDataFeed,
+		Key:        cfg.AlpacaAPIKey,
+		Secret:     cfg.AlpacaAPISecret,
 	}
 	pipelineInternal := handlers.PipelineInternalHandler{
 		PipelineDeps: handlers.PipelineDeps{

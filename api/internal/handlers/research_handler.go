@@ -157,6 +157,9 @@ func (h ResearchHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 				result.CandlesInserted = n
 			}
 		}
+		if err := services.EnrichSymbolsFromAlpaca(r.Context(), h.Store, h.Alpaca, symbols); err != nil {
+			errs = append(errs, "alpaca assets: "+err.Error())
+		}
 	} else {
 		missing := []string{}
 		if h.Alpaca == nil || h.Alpaca.Key == "" {
@@ -215,7 +218,7 @@ func (h ResearchHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h ResearchHandler) buildRow(ctx context.Context, symbol string, stored models.WorkspaceSignal) (models.ResearchStockRow, error) {
-	name, _ := h.Store.SymbolName(ctx, symbol)
+	name, exchange, assetClass, _ := h.Store.SymbolMeta(ctx, symbol)
 	mf, _ := h.Store.LatestMarketFeatures(ctx, symbol)
 	nf, _ := h.Store.LatestNewsFeatures(ctx, symbol)
 	candles, _ := h.Store.CandlesForSymbol(ctx, symbol, "1Day", 90)
@@ -243,10 +246,12 @@ func (h ResearchHandler) buildRow(ctx context.Context, symbol string, stored mod
 			Bullets:    []string{"No market data for this ticker — it was not scored."},
 		}
 	}
-	var lastClose *float64
+	var lastClose, dayHigh, dayLow *float64
 	if len(candles) > 0 {
-		c := candles[len(candles)-1].Close
-		lastClose = &c
+		latest := candles[len(candles)-1]
+		lastClose = &latest.Close
+		dayHigh = &latest.High
+		dayLow = &latest.Low
 	}
 
 	var updatedAt *time.Time
@@ -273,6 +278,10 @@ func (h ResearchHandler) buildRow(ctx context.Context, symbol string, stored mod
 	return models.ResearchStockRow{
 		Symbol:         symbol,
 		Name:           name,
+		Exchange:       exchange,
+		AssetClass:     assetClass,
+		DayHigh:        dayHigh,
+		DayLow:         dayLow,
 		DataStatus:     dataStatus,
 		Recommendation: rec.Action,
 		Confidence:     rec.Confidence,

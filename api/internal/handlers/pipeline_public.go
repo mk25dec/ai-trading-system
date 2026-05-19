@@ -285,13 +285,13 @@ func (h PipelinePublicHandler) ListWorkspaceSymbols(w http.ResponseWriter, r *ht
 		WriteError(w, http.StatusInternalServerError, "watchlist failed")
 		return
 	}
-	items, err := h.Store.ListSymbolsWithMarketStatusForSymbols(r.Context(), symbols)
+	items, err := h.Store.ListSymbolMarketDetailForSymbols(r.Context(), symbols)
 	if err != nil {
 		WriteError(w, http.StatusInternalServerError, "query failed")
 		return
 	}
 	if items == nil {
-		items = []map[string]any{}
+		items = []models.SymbolMarketDetail{}
 	}
 	writeJSON(w, http.StatusOK, items)
 }

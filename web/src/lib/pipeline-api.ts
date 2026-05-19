@@ -70,6 +70,33 @@ export interface SymbolMarketStatus {
   lastClose?: number
 }
 
+/** Enriched watchlist row from Alpaca bars + features (workspace /symbols). */
+export interface SymbolMarketDetail {
+  symbol: string
+  name: string
+  exchange?: string
+  assetClass: string
+  isActive: boolean
+  lastClose?: number
+  prevClose?: number
+  open?: number
+  high?: number
+  low?: number
+  volume?: number
+  high52w?: number
+  low52w?: number
+  priceChange24h?: number
+  priceChange5d?: number
+  rsi?: number
+  volatility?: number
+  volumeRatio?: number
+  distanceSma20?: number
+  sma20?: number
+  sma50?: number
+  latestCandleAt?: string
+  dataFetchedAt?: string
+}
+
 export interface SymbolFeatureSnapshot {
   symbol: string
   timestamp: string
@@ -227,6 +254,10 @@ export interface DecisionView {
 export interface ResearchStockRow {
   symbol: string
   name: string
+  exchange?: string
+  assetClass?: string
+  dayHigh?: number
+  dayLow?: number
   dataStatus?: "ready" | "no_market_data"
   recommendation: RecommendationAction
   confidence: number
@@ -277,7 +308,7 @@ export const pipelineApi = {
   newsArticles: (workspaceId: string) =>
     api.get<ArticleWithDetails[]>(`/api/v1/workspaces/${workspaceId}/news/articles`),
   symbols: (workspaceId: string) =>
-    api.get<SymbolMarketStatus[]>(`/api/v1/workspaces/${workspaceId}/symbols`),
+    api.get<SymbolMarketDetail[]>(`/api/v1/workspaces/${workspaceId}/symbols`),
   snapshots: (workspaceId: string) =>
     api.get<SymbolFeatureSnapshot[]>(
       `/api/v1/workspaces/${workspaceId}/symbols/snapshots/latest`,

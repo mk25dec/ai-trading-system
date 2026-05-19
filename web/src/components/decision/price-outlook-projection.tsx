@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { Maximize2 } from "lucide-react"
 import {
   Tooltip,
   TooltipContent,
@@ -10,22 +11,21 @@ import { buildPriceOutlook, formatPriceOutlookTooltip } from "@/lib/price-outloo
 import type { DecisionView, MarketCandle, MarketFeatures } from "@/lib/pipeline-api"
 import { cn } from "@/lib/utils"
 
+const MINI_W = 128
+const CHART_H = 36
+
 export function PriceOutlookProjection({
   symbol,
   name,
   candles,
   decision,
   market,
-  width = 120,
-  height = 44,
 }: {
   symbol: string
   name?: string
   candles: MarketCandle[]
   decision: DecisionView
   market?: MarketFeatures
-  width?: number
-  height?: number
 }) {
   const [dialogOpen, setDialogOpen] = useState(false)
   const outlook = buildPriceOutlook(candles, decision, market)
@@ -33,10 +33,11 @@ export function PriceOutlookProjection({
   if (!outlook) {
     return (
       <div
-        className="rounded bg-muted/40"
-        style={{ width, height }}
+        className="flex h-[52px] w-[128px] items-center justify-center rounded-md bg-muted/40 text-[10px] text-muted-foreground"
         title="Need more price history"
-      />
+      >
+        No chart
+      </div>
     )
   }
 
@@ -46,32 +47,40 @@ export function PriceOutlookProjection({
   const min = Math.min(...all)
   const max = Math.max(...all)
   const range = max - min || 1
-  const pad = 4
+  const padX = 2
+  const padY = 3
+  const width = MINI_W
+  const height = CHART_H
 
-  const toPoint = (value: number, index: number) => {
-    const x = pad + (index / Math.max(totalLen - 1, 1)) * (width - pad * 2)
-    const y = pad + (height - pad * 2) - ((value - min) / range) * (height - pad * 2)
-    return `${x},${y}`
-  }
+  const toXY = (value: number, index: number) => ({
+    x: padX + (index / Math.max(totalLen - 1, 1)) * (width - padX * 2),
+    y: padY + (height - padY * 2) - ((value - min) / range) * (height - padY * 2),
+  })
 
-  const histPoints = outlook.points
+  const histLine = outlook.points
     .filter((p) => p.kind === "history")
-    .map((p) => toPoint(p.close, p.index))
+    .map((p) => {
+      const { x, y } = toXY(p.close, p.index)
+      return `${x},${y}`
+    })
     .join(" ")
 
-  const projPoints = outlook.points
+  const projLine = outlook.points
     .filter((p) => p.index >= histCount - 1)
-    .map((p) => toPoint(p.close, p.index))
+    .map((p) => {
+      const { x, y } = toXY(p.close, p.index)
+      return `${x},${y}`
+    })
     .join(" ")
 
-  const splitX = pad + ((histCount - 1) / Math.max(totalLen - 1, 1)) * (width - pad * 2)
+  const splitX = padX + ((histCount - 1) / Math.max(totalLen - 1, 1)) * (width - padX * 2)
+  const projX = width - padX
   const bull = outlook.pBull3M >= 0.5
   const tip = formatPriceOutlookTooltip(outlook, symbol)
 
-  const zoneRects = outlook.zones.map((z) => {
-    const x1 = pad + (z.startIndex / Math.max(totalLen - 1, 1)) * (width - pad * 2)
-    const x2 = pad + (z.endIndex / Math.max(totalLen - 1, 1)) * (width - pad * 2)
-    return { ...z, x: x1, w: Math.max(x2 - x1, 2) }
+  const anchorTicks = outlook.anchors.map((a) => {
+    const { x } = toXY(a.price, a.index)
+    return { ...a, x }
   })
 
   return (
@@ -82,56 +91,79 @@ export function PriceOutlookProjection({
             render={
               <button
                 type="button"
-                className="block cursor-pointer rounded-md border border-transparent p-0.5 hover:border-border/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="group w-[128px] rounded-md border border-transparent p-1 text-left hover:border-border/80 hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 onClick={(e) => {
                   e.stopPropagation()
                   setDialogOpen(true)
                 }}
               >
-                <svg width={width} height={height} className="shrink-0" aria-hidden>
-                  {zoneRects.map((z) => (
-                    <g key={z.label}>
-                      <rect
-                        x={z.x}
-                        y={pad}
-                        width={z.w}
-                        height={height - pad * 2}
-                        className="fill-muted-foreground/15"
+                <div className="relative">
+                  <svg
+                    width={width}
+                    height={height}
+                    className="block"
+                    aria-label={`${symbol} price outlook`}
+                  >
+                    <rect
+                      x={splitX}
+                      y={padY}
+                      width={Math.max(projX - splitX, 1)}
+                      height={height - padY * 2}
+                      rx={1}
+                      className="fill-muted-foreground/12"
+                    />
+                    {anchorTicks.map((a) => (
+                      <line
+                        key={a.label}
+                        x1={a.x}
+                        y1={padY}
+                        x2={a.x}
+                        y2={height - padY}
+                        className="stroke-muted-foreground/25"
+                        strokeWidth={1}
                       />
-                      <text
-                        x={z.x + z.w / 2}
-                        y={pad + 7}
-                        textAnchor="middle"
-                        className="fill-muted-foreground text-[6px] font-medium"
-                      >
-                        {z.label}
-                      </text>
-                    </g>
+                    ))}
+                    <line
+                      x1={splitX}
+                      y1={padY}
+                      x2={splitX}
+                      y2={height - padY}
+                      className="stroke-border"
+                      strokeWidth={1}
+                    />
+                    <polyline
+                      fill="none"
+                      strokeWidth={1.5}
+                      strokeLinecap="round"
+                      className="stroke-slate-500 dark:stroke-slate-400"
+                      points={histLine}
+                    />
+                    <polyline
+                      fill="none"
+                      strokeWidth={1.5}
+                      strokeLinecap="round"
+                      strokeDasharray="3 2"
+                      className={bull ? "stroke-emerald-500" : "stroke-red-500"}
+                      points={projLine}
+                    />
+                  </svg>
+                  <Maximize2
+                    className="absolute right-0 top-0 size-3 text-muted-foreground/0 transition-colors group-hover:text-muted-foreground"
+                    aria-hidden
+                  />
+                </div>
+
+                <div className="mt-1 flex justify-between gap-0.5 px-0.5">
+                  {outlook.anchors.map((a) => (
+                    <span
+                      key={a.label}
+                      className="flex-1 truncate text-center font-mono text-[7px] font-medium leading-none text-muted-foreground"
+                    >
+                      {a.label}
+                    </span>
                   ))}
-                  <line
-                    x1={splitX}
-                    y1={pad}
-                    x2={splitX}
-                    y2={height - pad}
-                    className="stroke-border"
-                    strokeWidth="1"
-                  />
-                  <polyline
-                    fill="none"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    className="stroke-muted-foreground/80"
-                    points={histPoints}
-                  />
-                  <polyline
-                    fill="none"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeDasharray="3 2"
-                    className={bull ? "stroke-emerald-500" : "stroke-red-500"}
-                    points={projPoints}
-                  />
-                </svg>
+                </div>
+
                 <p
                   className={cn(
                     "mt-0.5 text-center font-mono text-[9px] font-semibold tabular-nums",
@@ -140,14 +172,13 @@ export function PriceOutlookProjection({
                       : "text-red-600 dark:text-red-400",
                   )}
                 >
-                  {(outlook.pBull3M * 100).toFixed(0)}% P↑
+                  {(outlook.pBull3M * 100).toFixed(0)}% P↑ · click chart
                 </p>
               </button>
             }
           />
           <TooltipContent side="top" className="max-w-sm whitespace-pre-wrap font-mono text-[11px]">
             {tip}
-            <span className="mt-1 block text-muted-foreground">Click to open chart</span>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
@@ -158,7 +189,6 @@ export function PriceOutlookProjection({
         symbol={symbol}
         name={name}
         outlook={outlook}
-        candles={candles}
       />
     </>
   )

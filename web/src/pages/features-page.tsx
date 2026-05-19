@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { AlertTriangle, TrendingDown, TrendingUp } from "lucide-react"
 import { useMemo, useState } from "react"
+import { AssetClassSection } from "@/components/asset-class-section"
 import { WorkspaceToolbar } from "@/components/workspace-toolbar"
 import { CategoryBreakdownTable } from "@/components/decision/category-breakdown-table"
 import { TraderKpiCards } from "@/components/decision/trader-kpi-cards"
@@ -40,6 +41,7 @@ import {
   type FinbertMetrics,
   type RecommendationAction,
 } from "@/lib/pipeline-api"
+import { ASSET_CLASS_LABELS, groupByAssetClass } from "@/lib/asset-class"
 import { cn } from "@/lib/utils"
 
 export function FeaturesPage() {
@@ -85,6 +87,8 @@ export function FeaturesPage() {
     [rows, summary],
   )
 
+  const outlookSections = useMemo(() => groupByAssetClass(rows), [rows])
+
   return (
     <div className="space-y-6">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -129,48 +133,40 @@ export function FeaturesPage() {
       {rows.length > 0 && <TraderKpiCards items={kpis} />}
 
 
-      <Card className="border-border/70 shadow-sm">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Trader outlook</CardTitle>
-          <CardDescription>
-            Composite score, 3D / 1W / 1M horizons, multi-horizon price projection (click chart), news stance, and
-            risk. Expand for drivers.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="overflow-x-auto p-0">
+      {outlookSections.length === 0 && workspaceId && !board.isLoading && (
+        <p className="rounded-lg border border-dashed py-8 text-center text-muted-foreground">
+          No feature data yet — add watchlist symbols on Research, then Get latest data.
+        </p>
+      )}
+
+      {outlookSections.map((section) => (
+        <AssetClassSection
+          key={`outlook-${section.key}`}
+          title={`Trader outlook — ${section.label}`}
+          assetClass={section.key}
+          count={section.items.length}
+          description={`${ASSET_CLASS_LABELS[section.key]} — composite score, horizons, price projection, news stance, and risk.`}
+        >
           <TraderOutlookTable
-            rows={rows}
+            rows={section.items}
             expanded={expanded}
             onToggle={(sym) => setExpanded((s) => (s === sym ? null : sym))}
             renderDetail={(row) => <FeaturesAnalystDetail row={row as FeatureRow} />}
-            emptyMessage={
-              workspaceId && !board.isLoading
-                ? "No feature data yet — add watchlist symbols on Research, then Get latest data."
-                : undefined
-            }
           />
-        </CardContent>
-      </Card>
+        </AssetClassSection>
+      ))}
 
-      <Card className="border-border/70 shadow-sm">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Score basis by category</CardTitle>
-          <CardDescription>
-            Per-symbol category scores in the grid — hover Overall for numeric substitution. Expand
-            Calculation rules below for formulas, data sources, and weights.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="overflow-x-auto p-0">
-          <CategoryBreakdownTable
-            rows={rows}
-            emptyMessage={
-              workspaceId && !board.isLoading
-                ? "No feature data yet — add watchlist symbols on Research, then Get latest data."
-                : undefined
-            }
-          />
-        </CardContent>
-      </Card>
+      {outlookSections.map((section) => (
+        <AssetClassSection
+          key={`category-${section.key}`}
+          title={`Score basis — ${section.label}`}
+          assetClass={section.key}
+          count={section.items.length}
+          description="Per-symbol category scores — expand Calculation rules below each grid for formulas and weights."
+        >
+          <CategoryBreakdownTable rows={section.items} />
+        </AssetClassSection>
+      ))}
 
       <Card className="border-border/70 shadow-sm">
         <CardHeader className="flex flex-row items-center justify-between gap-4 pb-2">

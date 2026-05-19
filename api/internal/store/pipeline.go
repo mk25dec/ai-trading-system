@@ -879,15 +879,129 @@ func (s *PipelineStore) EnsureSymbols(ctx context.Context, symbols []string) err
 }
 
 func (s *PipelineStore) SymbolName(ctx context.Context, symbol string) (string, error) {
-	var name string
-	err := s.pool.QueryRow(ctx, `SELECT name FROM symbols WHERE symbol = $1`, symbol).Scan(&name)
-	if err != nil {
-		return symbol, nil
-	}
-	if name == "" {
-		return symbol, nil
+	name, _, _, err := s.SymbolMeta(ctx, symbol)
+	if err != nil || name == "" {
+		return symbol, err
 	}
 	return name, nil
+}
+
+// SymbolMeta returns catalog name, exchange, and asset class for a ticker.
+func (s *PipelineStore) SymbolMeta(ctx context.Context, symbol string) (name string, exchange *string, assetClass string, err error) {
+	var ex *string
+	var class string
+	err = s.pool.QueryRow(ctx, `SELECT name, exchange, asset_class FROM symbols WHERE symbol = $1`, symbol).Scan(&name, &ex, &class)
+	if err != nil {
+		return symbol, nil, "equity", err
+	}
+	if name == "" {
+		name = symbol
+	}
+	if class == "" {
+		class = "equity"
+	}
+	return name, ex, class, nil
+}
+
+// UpsertSymbolCatalog updates symbol metadata from Alpaca asset lookup.
+func (s *PipelineStore) UpsertSymbolCatalog(ctx context.Context, symbol, name string, exchange *string, assetClass string) error {
+	if assetClass == "" {
+		assetClass = "equity"
+	}
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO symbols (symbol, name, exchange, asset_class, is_active, updated_at)
+		VALUES ($1, $2, $3, $4, TRUE, NOW())
+		ON CONFLICT (symbol) DO UPDATE SET
+			name = CASE WHEN EXCLUDED.name <> '' THEN EXCLUDED.name ELSE symbols.name END,
+			exchange = COALESCE(EXCLUDED.exchange, symbols.exchange),
+			asset_class = EXCLUDED.asset_class,
+			updated_at = NOW()`,
+		symbol, name, exchange, assetClass)
+	return err
+}
+
+func (s *PipelineStore) ListSymbolMarketDetailForSymbols(ctx context.Context, symbols []string) ([]models.SymbolMarketDetail, error) {
+	if len(symbols) == 0 {
+		return []models.SymbolMarketDetail{}, nil
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT
+			s.symbol,
+			s.name,
+			s.exchange,
+			COALESCE(NULLIF(s.asset_class, ''), 'equity'),
+			s.is_active,
+			c.close,
+			prev.close,
+			c.open,
+			c.high,
+			c.low,
+			c.volume,
+			r52.high_52w,
+			r52.low_52w,
+			mf.price_change_24h,
+			mf.price_change_5d,
+			mf.rsi,
+			mf.volatility,
+			mf.volume_ratio,
+			mf.distance_sma_20,
+			mf.sma_20,
+			mf.sma_50,
+			c.ts,
+			c.created_at
+		FROM symbols s
+		LEFT JOIN LATERAL (
+			SELECT ts, open, high, low, close, volume, created_at
+			FROM market_candles
+			WHERE symbol = s.symbol AND timeframe = '1Day'
+			ORDER BY ts DESC
+			LIMIT 1
+		) c ON TRUE
+		LEFT JOIN LATERAL (
+			SELECT close
+			FROM market_candles
+			WHERE symbol = s.symbol AND timeframe = '1Day'
+			ORDER BY ts DESC
+			OFFSET 1 LIMIT 1
+		) prev ON TRUE
+		LEFT JOIN LATERAL (
+			SELECT max(high) AS high_52w, min(low) AS low_52w
+			FROM market_candles
+			WHERE symbol = s.symbol AND timeframe = '1Day' AND ts > NOW() - INTERVAL '365 days'
+		) r52 ON TRUE
+		LEFT JOIN LATERAL (
+			SELECT price_change_24h, price_change_5d, rsi, volatility, volume_ratio,
+				distance_sma_20, sma_20, sma_50
+			FROM market_features
+			WHERE symbol = s.symbol AND timeframe = '1Day'
+			ORDER BY ts DESC
+			LIMIT 1
+		) mf ON TRUE
+		WHERE s.symbol = ANY($1) AND s.is_active
+		ORDER BY s.asset_class, s.symbol`, symbols)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []models.SymbolMarketDetail
+	for rows.Next() {
+		var d models.SymbolMarketDetail
+		var ex *string
+		if err := rows.Scan(
+			&d.Symbol, &d.Name, &ex, &d.AssetClass, &d.IsActive,
+			&d.LastClose, &d.PrevClose, &d.Open, &d.High, &d.Low, &d.Volume,
+			&d.High52w, &d.Low52w,
+			&d.PriceChange24h, &d.PriceChange5d, &d.RSI, &d.Volatility, &d.VolumeRatio,
+			&d.DistanceSma20, &d.SMA20, &d.SMA50,
+			&d.LatestCandleAt, &d.DataFetchedAt,
+		); err != nil {
+			return nil, err
+		}
+		d.Exchange = ex
+		list = append(list, d)
+	}
+	return list, rows.Err()
 }
 
 func (s *PipelineStore) LatestSignalsBySymbol(ctx context.Context, workspaceID string) (map[string]models.WorkspaceSignal, error) {

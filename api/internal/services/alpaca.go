@@ -14,11 +14,28 @@ import (
 )
 
 type AlpacaClient struct {
-	DataURL  string
-	DataFeed string // iex (free tier) or sip (paid)
-	Key      string
-	Secret   string
-	Client   *http.Client
+	DataURL    string
+	TradingURL string
+	DataFeed   string // iex (free tier) or sip (paid)
+	Key        string
+	Secret     string
+	Client     *http.Client
+}
+
+// AlpacaAsset is metadata from the trading API /v2/assets.
+type AlpacaAsset struct {
+	Symbol   string
+	Name     string
+	Exchange string
+	Class    string // us_equity, crypto, etc.
+}
+
+type alpacaAssetJSON struct {
+	Symbol   string `json:"symbol"`
+	Name     string `json:"name"`
+	Exchange string `json:"exchange"`
+	Class    string `json:"class"`
+	Status   string `json:"status"`
 }
 
 type alpacaBar struct {
@@ -136,4 +153,83 @@ func (a *AlpacaClient) FetchDailyBars(ctx context.Context, symbols []string, day
 	}
 
 	return all, nil
+}
+
+// FetchAssets loads symbol metadata from Alpaca trading API (batch by symbol list).
+func (a *AlpacaClient) FetchAssets(ctx context.Context, symbols []string) (map[string]AlpacaAsset, error) {
+	if a.Key == "" || a.Secret == "" {
+		return nil, fmt.Errorf("alpaca credentials not configured")
+	}
+	if len(symbols) == 0 {
+		return map[string]AlpacaAsset{}, nil
+	}
+	if a.Client == nil {
+		a.Client = &http.Client{Timeout: 90 * time.Second}
+	}
+	base := strings.TrimSuffix(a.TradingURL, "/")
+	if base == "" {
+		base = "https://api.alpaca.markets/v2"
+	}
+
+	out := make(map[string]AlpacaAsset, len(symbols))
+	// Alpaca supports filter by symbols query on /assets
+	for i := 0; i < len(symbols); i += 50 {
+		end := i + 50
+		if end > len(symbols) {
+			end = len(symbols)
+		}
+		chunk := symbols[i:end]
+		q := url.Values{}
+		q.Set("status", "active")
+		q.Set("symbols", strings.Join(chunk, ","))
+		u := fmt.Sprintf("%s/assets?%s", base, q.Encode())
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("APCA-API-KEY-ID", a.Key)
+		req.Header.Set("APCA-API-SECRET-KEY", a.Secret)
+
+		resp, err := a.Client.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		raw, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("alpaca assets %d: %s", resp.StatusCode, strings.TrimSpace(string(raw)))
+		}
+		var items []alpacaAssetJSON
+		if err := json.Unmarshal(raw, &items); err != nil {
+			return nil, err
+		}
+		for _, it := range items {
+			if it.Symbol == "" || it.Status != "active" {
+				continue
+			}
+			out[it.Symbol] = AlpacaAsset{
+				Symbol:   it.Symbol,
+				Name:     it.Name,
+				Exchange: it.Exchange,
+				Class:    it.Class,
+			}
+		}
+	}
+	return out, nil
+}
+
+// NormalizeAssetClass maps Alpaca asset class + name to app grouping key.
+func NormalizeAssetClass(alpacaClass, name string) string {
+	upper := strings.ToUpper(name)
+	if alpacaClass == "crypto" {
+		return "crypto"
+	}
+	if strings.Contains(upper, " ETF") || strings.HasSuffix(upper, " ETF") {
+		return "etf"
+	}
+	if alpacaClass == "us_equity" || alpacaClass == "" {
+		return "equity"
+	}
+	return "other"
 }

@@ -1,13 +1,5 @@
 import type { ReactNode } from "react"
-import {
-  AlertTriangle,
-  ChevronDown,
-  ChevronRight,
-  Minus,
-  Newspaper,
-  TrendingDown,
-  TrendingUp,
-} from "lucide-react"
+import { AlertTriangle, ChevronDown, ChevronRight, Newspaper } from "lucide-react"
 import { DecisionHeroPanel } from "@/components/decision/decision-hero-panel"
 import { MiniSparkline } from "@/components/decision/mini-sparkline"
 import { PriceOutlookProjection } from "@/components/decision/price-outlook-projection"
@@ -22,20 +14,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import {
-  alignmentLabel,
-  priceTrendLabel,
-  resolveDecision,
-  signalSubline,
-  stanceLabel,
-} from "@/lib/decision-engine"
+import { alignmentLabel, resolveDecision, signalSubline, stanceLabel } from "@/lib/decision-engine"
 import {
   actionAccent,
   alignmentSpectrum,
   riskSpectrum,
   stanceSpectrum,
 } from "@/lib/decision-visuals"
-import { formatPct, pctClass } from "@/lib/feature-metrics"
+import { TraderStockQuoteCell } from "@/components/trader-stock-quote-cell"
 import type { RecommendationAction, ResearchStockRow } from "@/lib/pipeline-api"
 import { cn } from "@/lib/utils"
 
@@ -57,13 +43,12 @@ export function TraderOutlookTable({
       <TableHeader>
         <TableRow className="border-b bg-muted/30 hover:bg-muted/30">
           <TableHead className="w-8" />
-          <TableHead>Symbol</TableHead>
+          <TableHead className="min-w-[220px]">Security · quote</TableHead>
           <TableHead className="w-[72px]">Chart</TableHead>
-          <TableHead className="min-w-[120px]">Price outlook</TableHead>
+          <TableHead className="min-w-[140px]">Price outlook</TableHead>
           <TableHead>Signal</TableHead>
           <TableHead className="text-right">Score</TableHead>
           <TableHead className="text-center">Horizons</TableHead>
-          <TableHead>Price</TableHead>
           <TableHead>News</TableHead>
           <TableHead>Risk</TableHead>
           <TableHead>Alignment</TableHead>
@@ -82,7 +67,7 @@ export function TraderOutlookTable({
         ))}
         {rows.length === 0 && emptyMessage && (
           <TableRow>
-            <TableCell colSpan={12} className="py-12 text-center text-muted-foreground">
+            <TableCell colSpan={11} className="py-12 text-center text-muted-foreground">
               {emptyMessage}
             </TableCell>
           </TableRow>
@@ -109,13 +94,6 @@ function TraderOutlookRow({
   const risk = riskSpectrum(d.riskLevel)
   const align = alignmentSpectrum(d.alignment)
 
-  const TrendIcon =
-    d.priceTrend === "uptrend"
-      ? TrendingUp
-      : d.priceTrend === "downtrend"
-        ? TrendingDown
-        : Minus
-
   return (
     <>
       <TableRow
@@ -133,9 +111,8 @@ function TraderOutlookRow({
             <ChevronRight className="size-4 text-muted-foreground" />
           )}
         </TableCell>
-        <TableCell>
-          <div className="font-mono text-base font-bold tracking-tight">{row.symbol}</div>
-          <div className="truncate text-xs text-muted-foreground">{row.name}</div>
+        <TableCell className="align-top py-3">
+          <TraderStockQuoteCell row={row} />
         </TableCell>
         <TableCell>
           <MiniSparkline candles={row.candles ?? []} />
@@ -165,24 +142,6 @@ function TraderOutlookRow({
             {d.horizons.map((h) => (
               <HorizonOutlookBadge key={h.id} horizon={h} />
             ))}
-          </div>
-        </TableCell>
-        <TableCell>
-          <div className="flex items-center gap-1.5">
-            <TrendIcon
-              className={cn(
-                "size-4 shrink-0",
-                d.priceTrend === "uptrend" && "text-emerald-600 dark:text-emerald-400",
-                d.priceTrend === "downtrend" && "text-red-600 dark:text-red-400",
-                d.priceTrend === "sideways" && "text-muted-foreground",
-              )}
-            />
-            <div>
-              <p className="text-xs font-semibold">{priceTrendLabel(d.priceTrend)}</p>
-              <p className={cn("font-mono text-xs tabular-nums", pctClass(row.market?.priceChange24h))}>
-                {formatPct(row.market?.priceChange24h)}
-              </p>
-            </div>
           </div>
         </TableCell>
         <TableCell>
@@ -231,7 +190,7 @@ function TraderOutlookRow({
       </TableRow>
       {open && (
         <TableRow className="hover:bg-transparent">
-          <TableCell colSpan={12} className={cn("border-l-4 bg-muted/15 p-0", actionAccent(action))}>
+          <TableCell colSpan={11} className={cn("border-l-4 bg-muted/15 p-0", actionAccent(action))}>
             <div className="space-y-4 p-5">
               <DecisionHeroPanel decision={d} />
               {renderDetail ? (
