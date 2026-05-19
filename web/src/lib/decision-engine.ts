@@ -8,10 +8,82 @@ import type {
 } from "@/lib/pipeline-api"
 
 export function resolveDecision(row: ResearchStockRow): DecisionView {
-  if (row.decision && row.decision.horizons?.length >= 3) {
-    return row.decision
+  const base =
+    row.decision && row.decision.horizons?.length >= 3
+      ? row.decision
+      : fallbackDecision(row)
+  return enrichNewsStance(base, row)
+}
+
+function enrichNewsStance(d: DecisionView, row: ResearchStockRow): DecisionView {
+  if (d.newsStance && d.newsStance !== "unknown") {
+    return d
   }
-  return fallbackDecision(row)
+  const inferred = inferNewsFromRow(row)
+  if (!inferred) {
+    return d
+  }
+  return {
+    ...d,
+    newsStance: inferred.stance,
+    newsConfidence: inferred.confidence ?? d.newsConfidence,
+  }
+}
+
+function inferNewsFromRow(row: ResearchStockRow): { stance: string; confidence?: number } | null {
+  const nf = row.news
+  if (!nf) {
+    return { stance: "no_news" }
+  }
+  const articles = nf.newsCount24h || nf.newsCount4h || nf.newsCount1h || 0
+  if (articles === 0) {
+    return { stance: "no_news" }
+  }
+
+  const fb = finbertForRow(row)
+  let score: number | undefined
+  const confParts: number[] = []
+  let acc = 0
+  let wsum = 0
+
+  const addWindow = (sent?: number, count?: number, weight = 1, modelConf?: number) => {
+    if (sent == null || !count) return
+    const coverage = Math.min(1, count / 3)
+    acc += sent * weight * coverage
+    wsum += weight * coverage
+    if (modelConf != null) confParts.push(modelConf)
+  }
+
+  addWindow(nf.avgSentiment1h, nf.newsCount1h, 1.2, fb?.avgConfidence1h)
+  addWindow(nf.avgSentiment4h, nf.newsCount4h, 1, fb?.avgConfidence4h)
+  addWindow(nf.avgSentiment24h, nf.newsCount24h, 0.85, fb?.avgConfidence24h)
+  if (wsum > 0) score = acc / wsum
+
+  if (score == null && fb?.weightedSentiment24h != null) {
+    score = fb.weightedSentiment24h
+    if (fb.avgConfidence24h != null) confParts.push(fb.avgConfidence24h)
+  } else if (score == null && fb?.positiveLabelPct24h != null) {
+    const pos = fb.positiveLabelPct24h
+    const neg = fb.negativeLabelPct24h ?? 0
+    score = pos - neg
+    confParts.push(0.45)
+  } else if (score == null && nf.avgSentiment24h != null) {
+    score = nf.avgSentiment24h
+  }
+
+  if (score != null) {
+    const sampleConf = 1 - Math.exp(-articles / 5)
+    const modelConf =
+      confParts.length > 0
+        ? confParts.reduce((a, b) => a * b, 1) ** (1 / confParts.length)
+        : 0.35
+    return {
+      stance: stanceFromSentiment(score),
+      confidence: Math.min(0.95, Math.sqrt(sampleConf * modelConf)),
+    }
+  }
+
+  return { stance: "neutral", confidence: 0.22 }
 }
 
 function fallbackDecision(row: ResearchStockRow): DecisionView {
@@ -99,9 +171,20 @@ export function stanceLabel(stance: string): string {
       return "Bearish"
     case "neutral":
       return "Neutral"
+    case "no_news":
+      return "No news"
     default:
       return "Unknown"
   }
+}
+
+/** When trade action is cautious but composite outlook is directional. */
+export function signalSubline(decision: DecisionView): string {
+  const outlook = decision.primaryOutlook
+  if (decision.primaryAction === "watch" && outlook !== "Watch") {
+    return `Outlook: ${outlook} · cautious`
+  }
+  return `Outlook: ${outlook}`
 }
 
 export function priceTrendLabel(trend: string): string {

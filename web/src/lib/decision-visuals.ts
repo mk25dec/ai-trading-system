@@ -105,6 +105,8 @@ export function stanceSpectrum(stance: string) {
       return { text: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-500/12", icon: "bull" as const }
     case "bearish":
       return { text: "text-red-600 dark:text-red-400", bg: "bg-red-500/12", icon: "bear" as const }
+    case "no_news":
+      return { text: "text-muted-foreground/80", bg: "bg-muted/30", icon: "neutral" as const }
     default:
       return { text: "text-muted-foreground", bg: "bg-muted/50", icon: "neutral" as const }
   }

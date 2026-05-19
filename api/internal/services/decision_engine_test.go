@@ -65,4 +65,43 @@ func TestComputeDecision_conflictPriceVsNews(t *testing.T) {
 	}
 }
 
+func TestNewsStance_labelPctOnly(t *testing.T) {
+	pos, neg := 0.55, 0.25
+	nf := &models.NewsFeatures{
+		NewsCount24h: 4,
+		Finbert: models.FinbertMetrics{
+			PositiveLabelPct24h: &pos,
+			NegativeLabelPct24h: &neg,
+		},
+	}
+	stance, conf := newsStanceFromFeatures(nf)
+	if stance == "unknown" {
+		t.Fatalf("expected stance from label pct, got unknown")
+	}
+	if stance != "bullish" {
+		t.Fatalf("expected bullish, got %s", stance)
+	}
+	if conf == nil || *conf <= 0 {
+		t.Fatal("expected positive confidence")
+	}
+}
+
+func TestNewsStance_articlesNoScoreYet(t *testing.T) {
+	nf := &models.NewsFeatures{NewsCount24h: 2}
+	stance, conf := newsStanceFromFeatures(nf)
+	if stance != "neutral" {
+		t.Fatalf("expected neutral for unscored articles, got %s", stance)
+	}
+	if conf == nil {
+		t.Fatal("expected low confidence")
+	}
+}
+
+func TestNewsStance_noNews(t *testing.T) {
+	stance, conf := newsStanceFromFeatures(nil)
+	if stance != "no_news" || conf != nil {
+		t.Fatalf("expected no_news, got %s", stance)
+	}
+}
+
 func ptrFloat(v float64) *float64 { return &v }

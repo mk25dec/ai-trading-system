@@ -25,6 +25,7 @@ import {
   alignmentLabel,
   priceTrendLabel,
   resolveDecision,
+  signalSubline,
   stanceLabel,
 } from "@/lib/decision-engine"
 import {
@@ -139,7 +140,7 @@ function TraderOutlookRow({
         </TableCell>
         <TableCell>
           <RecommendationBadge action={action} />
-          <p className="mt-1 text-[10px] font-medium text-muted-foreground">{d.primaryOutlook}</p>
+          <p className="mt-1 text-[10px] font-medium text-muted-foreground">{signalSubline(d)}</p>
         </TableCell>
         <TableCell className="text-right">
           <ScoreGauge score={d.compositeScore} size="sm" />

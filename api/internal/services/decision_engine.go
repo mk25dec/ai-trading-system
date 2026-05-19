@@ -106,27 +106,17 @@ func categoryTechnical(mf *models.MarketFeatures) (float64, float64) {
 	n := 0
 
 	if mf.PriceChange24h != nil {
-		parts = append(parts, clamp(*mf.PriceChange24h/4, -1, 1))
+		parts = append(parts, tanhScale(*mf.PriceChange24h, 4))
 		conf += 0.9
 		n++
 	}
 	if mf.RSI != nil {
-		rsi := *mf.RSI
-		var s float64
-		switch {
-		case rsi >= 70:
-			s = -0.5
-		case rsi <= 30:
-			s = 0.5
-		default:
-			s = (50 - rsi) / 50
-		}
-		parts = append(parts, s)
+		parts = append(parts, rsiSignal(*mf.RSI))
 		conf += 0.85
 		n++
 	}
 	if mf.DistanceSMA20 != nil {
-		parts = append(parts, clamp(*mf.DistanceSMA20*5, -1, 1))
+		parts = append(parts, tanhScale(*mf.DistanceSMA20*100, 3))
 		conf += 0.8
 		n++
 	}
@@ -151,7 +141,7 @@ func categoryTrend(mf *models.MarketFeatures) (float64, float64) {
 	}
 	ch24, ch5 := *mf.PriceChange24h, *mf.PriceChange5d
 	aligned := (ch24 > 0 && ch5 > 0) || (ch24 < 0 && ch5 < 0)
-	score := mean([]float64{clamp(ch24/3, -1, 1), clamp(ch5/5, -1, 1)})
+	score := mean([]float64{tanhScale(ch24, 3), tanhScale(ch5, 6)})
 	if !aligned {
 		score *= 0.5
 	}
@@ -176,11 +166,14 @@ func categorySentiment(nf *models.NewsFeatures) (float64, float64) {
 		scores = append(scores, clamp(*sent, -1, 1))
 		weights = append(weights, w*math.Min(1, float64(count)/3))
 	}
-	add(nf.AvgSentiment1h, 1.0, nf.NewsCount1h)
-	add(nf.AvgSentiment4h, 0.85, nf.NewsCount4h)
-	add(nf.AvgSentiment24h, 0.7, nf.NewsCount24h)
+	add(nf.AvgSentiment1h, decayWeight(0.5, 6), nf.NewsCount1h)
+	add(nf.AvgSentiment4h, decayWeight(2, 12), nf.NewsCount4h)
+	add(nf.AvgSentiment24h, decayWeight(12, 24), nf.NewsCount24h)
 
 	if len(scores) == 0 {
+		if s, c := inferNewsScore(nf); s != nil {
+			return *s, c
+		}
 		return 0, 0
 	}
 	wsum := 0.0
@@ -209,8 +202,11 @@ func categoryFinbert(nf *models.NewsFeatures) (float64, float64) {
 	fb := nf.Finbert
 	sent := finbertSignedScore(fb)
 	if sent == nil {
-		if nf.AvgSentiment24h != nil {
-			return clamp(*nf.AvgSentiment24h, -1, 1), 0.5
+		sent = finbertLabelScore(fb)
+	}
+	if sent == nil {
+		if s, c := inferNewsScore(nf); s != nil {
+			return *s, c
 		}
 		return 0, 0
 	}
@@ -218,8 +214,16 @@ func categoryFinbert(nf *models.NewsFeatures) (float64, float64) {
 	if fb.AvgConfidence24h != nil {
 		conf = clamp(*fb.AvgConfidence24h, 0.35, 0.95)
 	}
-	if nf.NewsCount24h >= 3 {
-		conf = math.Min(0.95, conf+0.08)
+	n := nf.NewsCount24h
+	if n == 0 {
+		n = nf.NewsCount1h
+	}
+	if n > 0 {
+		pos := 0
+		if fb.PositiveLabelPct24h != nil {
+			pos = int(*fb.PositiveLabelPct24h * float64(n))
+		}
+		conf = combineConfidence(conf, wilsonLowerBound(pos, n, 1.96), sampleConfidence(n, 5))
 	}
 	return clamp(*sent, -1, 1), conf
 }
@@ -230,7 +234,7 @@ func finbertSignedScore(fb models.FinbertMetrics) *float64 {
 	}
 	pPos, pNeg, pNeu := fb.AvgProbPositive24h, fb.AvgProbNegative24h, fb.AvgProbNeutral24h
 	if pPos == nil && pNeg == nil {
-		return nil
+		return finbertLabelScore(fb)
 	}
 	pos, neg, neu := 0.0, 0.0, 0.0
 	if pPos != nil {
@@ -298,8 +302,7 @@ func scoreHorizon(
 		raw += risk * w.risk
 	}
 
-	score100 := (raw + 1) / 2 * 100
-	score100 = clamp(score100, 0, 100)
+	score100 := scoreFromSigmoid(raw)
 
 	conf := horizonConfidence(mf, nf, cats)
 	outlook := scoreToOutlook(score100)
@@ -329,13 +332,13 @@ func horizonSentiment(nf *models.NewsFeatures, sw sentimentWindow) float64 {
 	add(nf.AvgSentiment1h, sw.h1, nf.NewsCount1h)
 	add(nf.AvgSentiment4h, sw.h4, nf.NewsCount4h)
 	add(nf.AvgSentiment24h, sw.h24, nf.NewsCount24h)
-	if w == 0 {
-		if s := finbertSignedScore(nf.Finbert); s != nil {
-			return *s
-		}
-		return 0
+	if w > 0 {
+		return acc / w
 	}
-	return acc / w
+	if s, _ := inferNewsScore(nf); s != nil {
+		return *s
+	}
+	return 0
 }
 
 func weightedCategory(cats []models.CategoryScore, id string, scale float64) float64 {
@@ -393,13 +396,21 @@ func horizonAlignment(short, swing, position models.HorizonOutlook) (string, flo
 }
 
 func detectConflict(mf *models.MarketFeatures, nf *models.NewsFeatures, horizons ...models.HorizonOutlook) (bool, string) {
-	if mf != nil && mf.PriceChange24h != nil && nf != nil && nf.AvgSentiment24h != nil {
-		priceUp := *mf.PriceChange24h > 0.5
-		newsBear := *nf.AvgSentiment24h < -0.2
-		priceDown := *mf.PriceChange24h < -0.5
-		newsBull := *nf.AvgSentiment24h > 0.2
-		if (priceUp && newsBear) || (priceDown && newsBull) {
-			return true, "Price trend and 24h news sentiment disagree"
+	if mf != nil && mf.PriceChange24h != nil && nf != nil {
+		var newsSent *float64
+		if nf.AvgSentiment24h != nil {
+			newsSent = nf.AvgSentiment24h
+		} else if s, _ := inferNewsScore(nf); s != nil {
+			newsSent = s
+		}
+		if newsSent != nil {
+			priceUp := *mf.PriceChange24h > 0.5
+			newsBear := *newsSent < -0.2
+			priceDown := *mf.PriceChange24h < -0.5
+			newsBull := *newsSent > 0.2
+			if (priceUp && newsBear) || (priceDown && newsBull) {
+				return true, "Price trend and news sentiment disagree"
+			}
 		}
 	}
 	bull, bear := 0, 0
@@ -528,20 +539,6 @@ func outlookLabel(outlook string) string {
 	default:
 		return "Watch"
 	}
-}
-
-func newsStanceFromFeatures(nf *models.NewsFeatures) (string, *float64) {
-	if nf == nil {
-		return "unknown", nil
-	}
-	if s := finbertSignedScore(nf.Finbert); s != nil {
-		conf := nf.Finbert.AvgConfidence24h
-		return stanceFromScore(*s), conf
-	}
-	if nf.AvgSentiment24h != nil {
-		return stanceFromScore(*nf.AvgSentiment24h), nil
-	}
-	return "unknown", nil
 }
 
 func stanceFromScore(s float64) string {
