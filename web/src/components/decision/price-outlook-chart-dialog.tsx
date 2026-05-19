@@ -244,17 +244,6 @@ function buildChartOption(
         connectNulls: true,
         lineStyle: { width: 2.5, type: "dashed", color: projColor },
         itemStyle: { color: projColor },
-        markPoint: {
-          symbol: "circle",
-          symbolSize: 8,
-          data: outlook.anchors.map((a) => ({
-            name: a.label,
-            xAxis: a.index,
-            yAxis: a.price,
-            value: `$${a.price.toFixed(2)}`,
-            itemStyle: { color: projColor },
-          })),
-        },
       },
     ],
   }
