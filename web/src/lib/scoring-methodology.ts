@@ -26,8 +26,8 @@ export const SCORING_FORMULAS: FormulaEntry[] = [
     expression:
       "FinalScore(T) = Σᵢ (CategoryScoreᵢ(T) × CategoryWeightᵢ × Confidenceᵢ) − RiskPenalty(T) + RegimeAdjustment(T)",
     period: "Per horizon T (3D, 1W, 1M, …)",
-    status: "research_target",
-    notes: "my-research.md Calculation rules — full v2 target; RegimeAdjustment not yet wired.",
+    status: "implemented",
+    notes: "finalHorizonRaw in decision_finbert.go — per-horizon Σ(score×weight×conf); RegimeAdjustment still planned.",
   },
   {
     id: "horizon_score",

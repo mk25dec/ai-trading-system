@@ -84,19 +84,19 @@ type sentimentWindow struct {
 func scoreCategories(mf *models.MarketFeatures, nf *models.NewsFeatures) []models.CategoryScore {
 	var out []models.CategoryScore
 	if t, c := categoryTechnical(mf); c > 0 {
-		out = append(out, models.CategoryScore{ID: "technical", Label: "Technical momentum", Score: t, Confidence: c, Weight: 0.35})
+		out = append(out, models.CategoryScore{ID: "technical", Label: "Technical momentum", Score: t, Confidence: c, Weight: weightTechnical})
 	}
 	if t, c := categoryTrend(mf); c > 0 {
-		out = append(out, models.CategoryScore{ID: "trend", Label: "Trend strength", Score: t, Confidence: c, Weight: 0.12})
+		out = append(out, models.CategoryScore{ID: "trend", Label: "Trend strength", Score: t, Confidence: c, Weight: weightTrend})
 	}
-	if s, c := categorySentiment(nf); c > 0 {
-		out = append(out, models.CategoryScore{ID: "sentiment", Label: "News sentiment", Score: s, Confidence: c, Weight: 0.30})
-	}
+	// Single news path: FinBERT-led; legacy avg_sentiment only when FinBERT absent.
 	if f, c := categoryFinbert(nf); c > 0 {
-		out = append(out, models.CategoryScore{ID: "finbert", Label: "FinBERT tone", Score: f, Confidence: c, Weight: 0.18})
+		out = append(out, models.CategoryScore{ID: "finbert", Label: "FinBERT tone", Score: f, Confidence: c, Weight: weightNews})
+	} else if s, c := categorySentiment(nf); c > 0 {
+		out = append(out, models.CategoryScore{ID: "sentiment", Label: "News sentiment (fallback)", Score: s, Confidence: c, Weight: weightNews})
 	}
 	if r, c := categoryRisk(mf, nf); c > 0 {
-		out = append(out, models.CategoryScore{ID: "risk", Label: "Risk factors", Score: r, Confidence: c, Weight: 0.05})
+		out = append(out, models.CategoryScore{ID: "risk", Label: "Risk factors", Score: r, Confidence: c, Weight: weightRisk})
 	}
 	return out
 }
@@ -221,9 +221,6 @@ func categoryFinbert(nf *models.NewsFeatures) (float64, float64) {
 		sent = finbertLabelScore(fb)
 	}
 	if sent == nil {
-		if s, c := inferNewsScore(nf); s != nil {
-			return *s, c
-		}
 		return 0, 0
 	}
 	conf := 0.45
@@ -303,23 +300,12 @@ func scoreHorizon(
 	w horizonWeights,
 	sw sentimentWindow,
 ) models.HorizonOutlook {
-	tech := weightedCategory(cats, "technical", 0.5) + weightedCategory(cats, "trend", 0.5)
-	sent := horizonSentiment(nf, sw)
-	finbert := weightedCategory(cats, "finbert", 1)
-	if finbert == 0 {
-		finbert = sent
-	} else {
-		blend := CalibrationParamsActive().HorizonFinbertBlend
-		finbert = finbert*blend + sent*(1-blend)
-	}
-	risk := weightedCategory(cats, "risk", 1)
-
-	raw := tech*w.technical + finbert*w.sentiment
-	if risk < 0 {
-		raw += risk * w.risk
-	}
+	raw := finalHorizonRaw(cats, nf, sw, w)
 
 	strength := categorySignalStrength(cats)
+	if _, newsConf := finbertHorizonScore(nf, sw); newsConf > 0 {
+		strength += newsConf * weightNews
+	}
 	if strength < 0.08 {
 		return models.HorizonOutlook{
 			ID: id, Label: label, Score: 0, Outlook: "watch",

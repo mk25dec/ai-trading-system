@@ -61,7 +61,7 @@ flowchart LR
 
 ---
 
-## Sprint B — Signal richness (queued)
+## Sprint B — Signal richness (implemented)
 
 **Outcome:** Implement research-target `FinalScore(T) = Σᵢ (CategoryScoreᵢ × Weightᵢ × Confidenceᵢ) − RiskPenalty + RegimeAdjustment` per horizon; use **every** aggregated FinBERT field; remove double-counting between `sentiment` and `finbert` categories.
 

@@ -53,6 +53,12 @@ FinalScore(T) = Σᵢ (CategoryScoreᵢ(T) × CategoryWeightᵢ × Confidenceᵢ
 
 Tunable values live in `config/calibration.json` (loaded by API via `CALIBRATION_CONFIG`). Re-fit with `go run ./cmd/calibrate/ -optimize`. Web P(up) uses matching constants in `web/src/lib/calibration.ts`.
 
+#### Signal richness (Sprint B)
+
+- Horizons use `finalHorizonRaw`: **Σᵢ (CategoryScoreᵢ × Weightᵢ × Confidenceᵢ)** with horizon-specific FinBERT windows (`decision_finbert.go`).
+- **Single news path:** `finbert` category (48% weight) OR `sentiment` fallback when FinBERT absent — never both.
+- FinBERT uses 1h/4h/24h softmax edges, entropy discount, tail probs, high-confidence counts.
+
 ### 1.5 Trader signal table (outlook vs trade action)
 
 The **Trader outlook** column shows two related outputs from `ComputeDecision` in `decision_engine.go`:
