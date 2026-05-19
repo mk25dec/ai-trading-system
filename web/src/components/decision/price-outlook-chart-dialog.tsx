@@ -36,6 +36,23 @@ function buildChartOption(
   const projData = outlook.points.map((p, i) =>
     i >= histCount - 1 ? p.close : null,
   )
+  const upperData = outlook.points.map((p, i) => {
+    if (i < histCount) return null
+    const u = outlook.bandUpper.find((b) => b.index === p.index)
+    return u?.close ?? null
+  })
+  const lowerData = outlook.points.map((p, i) => {
+    if (i < histCount) return null
+    const l = outlook.bandLower.find((b) => b.index === p.index)
+    return l?.close ?? null
+  })
+  const bandFillData = outlook.points.map((p, i) => {
+    if (i < histCount) return null
+    const u = outlook.bandUpper.find((b) => b.index === p.index)
+    const l = outlook.bandLower.find((b) => b.index === p.index)
+    if (u == null || l == null) return null
+    return u.close - l.close
+  })
 
   const projColor = bullish ? "#10b981" : "#ef4444"
   const lastHistIndex = histCount - 1
@@ -61,7 +78,7 @@ function buildChartOption(
       top: 8,
       left: "center",
       textStyle: { color: "#64748b", fontSize: 11 },
-      data: ["Historical", "Projected"],
+      data: ["Historical", "±1σ band", "Projected"],
     },
     tooltip: {
       trigger: "axis",
@@ -81,9 +98,14 @@ function buildChartOption(
         if (!pt) return ""
         const kind = pt.kind === "history" ? "Historical" : "Projected"
         const anchor = outlook.anchors.find((a) => a.index === idx)
+        const upper = outlook.bandUpper.find((b) => b.index === idx)
+        const lower = outlook.bandLower.find((b) => b.index === idx)
         return [
           `<div style="font-weight:600;margin-bottom:4px">${symbol} · ${kind}</div>`,
           `Price: <b>$${pt.close.toFixed(2)}</b>`,
+          upper && lower
+            ? `Band: $${lower.close.toFixed(2)} – $${upper.close.toFixed(2)}`
+            : "",
           anchor ? `Horizon: <b>${anchor.label}</b>` : "",
           pt.date && pt.kind === "history"
             ? new Date(pt.date).toLocaleDateString(undefined, {
@@ -177,6 +199,38 @@ function buildChartOption(
             ],
           ],
         },
+      },
+      {
+        name: "±1σ band",
+        type: "line",
+        data: lowerData,
+        lineStyle: { opacity: 0 },
+        stack: "confidence",
+        symbol: "none",
+        connectNulls: true,
+        silent: true,
+      },
+      {
+        name: "BandFill",
+        type: "line",
+        data: bandFillData,
+        lineStyle: { opacity: 0 },
+        stack: "confidence",
+        areaStyle: {
+          color: bullish ? "rgba(16, 185, 129, 0.14)" : "rgba(239, 68, 68, 0.14)",
+        },
+        symbol: "none",
+        connectNulls: true,
+        silent: true,
+      },
+      {
+        name: "BandUpper",
+        type: "line",
+        data: upperData,
+        lineStyle: { width: 1, type: "dotted", color: "rgba(148, 163, 184, 0.55)" },
+        symbol: "none",
+        connectNulls: true,
+        silent: true,
       },
       {
         name: "Projected",
@@ -276,8 +330,8 @@ export function PriceOutlookChartDialog({
             {name ? <span className="font-sans font-normal text-muted-foreground"> · {name}</span> : null}
           </DialogTitle>
           <DialogDescription>
-            Historical close (left) and projected path (grey zone). Hover for crosshair · drag slider
-            to zoom.
+            Historical close, projected path (dashed), and ±1σ uncertainty band. Model projection —
+            not a price guarantee. Hover for crosshair · drag slider to zoom.
           </DialogDescription>
         </DialogHeader>
 

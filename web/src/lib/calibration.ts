@@ -9,5 +9,5 @@ export const CALIBRATION = {
   horizonFinbertBlend: 0.65,
   logisticCenter: 50,
   logisticScale: 10,
-  pUpFinbertWeight: 0,
+  pUpFinbertWeight: 0.12,
 } as const

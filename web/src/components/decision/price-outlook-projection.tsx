@@ -8,7 +8,12 @@ import {
 } from "@/components/ui/tooltip"
 import { PriceOutlookChartDialog } from "@/components/decision/price-outlook-chart-dialog"
 import { buildPriceOutlook, formatPriceOutlookTooltip } from "@/lib/price-outlook"
-import type { DecisionView, MarketCandle, MarketFeatures } from "@/lib/pipeline-api"
+import type {
+  DecisionView,
+  MarketCandle,
+  MarketFeatures,
+  NewsFeatures,
+} from "@/lib/pipeline-api"
 import { cn } from "@/lib/utils"
 
 const MINI_W = 128
@@ -20,15 +25,17 @@ export function PriceOutlookProjection({
   candles,
   decision,
   market,
+  news,
 }: {
   symbol: string
   name?: string
   candles: MarketCandle[]
   decision: DecisionView
   market?: MarketFeatures
+  news?: NewsFeatures
 }) {
   const [dialogOpen, setDialogOpen] = useState(false)
-  const outlook = buildPriceOutlook(candles, decision, market)
+  const outlook = buildPriceOutlook(candles, decision, market, news)
 
   if (!outlook) {
     return (
@@ -67,6 +74,19 @@ export function PriceOutlookProjection({
 
   const projLine = outlook.points
     .filter((p) => p.index >= histCount - 1)
+    .map((p) => {
+      const { x, y } = toXY(p.close, p.index)
+      return `${x},${y}`
+    })
+    .join(" ")
+
+  const bandUpperLine = outlook.bandUpper
+    .map((p) => {
+      const { x, y } = toXY(p.close, p.index)
+      return `${x},${y}`
+    })
+    .join(" ")
+  const bandLowerLine = outlook.bandLower
     .map((p) => {
       const { x, y } = toXY(p.close, p.index)
       return `${x},${y}`
@@ -137,6 +157,22 @@ export function PriceOutlookProjection({
                       strokeLinecap="round"
                       className="stroke-slate-500 dark:stroke-slate-400"
                       points={histLine}
+                    />
+                    <polyline
+                      fill="none"
+                      strokeWidth={1}
+                      strokeLinecap="round"
+                      strokeDasharray="2 2"
+                      className="stroke-muted-foreground/40"
+                      points={bandUpperLine}
+                    />
+                    <polyline
+                      fill="none"
+                      strokeWidth={1}
+                      strokeLinecap="round"
+                      strokeDasharray="2 2"
+                      className="stroke-muted-foreground/40"
+                      points={bandLowerLine}
                     />
                     <polyline
                       fill="none"

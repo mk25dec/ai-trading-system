@@ -98,10 +98,10 @@ export const SCORING_FORMULAS: FormulaEntry[] = [
     id: "price_projection",
     name: "Multi-horizon price projection",
     expression:
-      "P_T = P₀×(1+edge×σ√(days/252)+trend); P(up)=logistic×0.5+prior×0.35+conf×0.1",
-    period: "Anchors 3D·1W·2W·3W·1M (21d path); grey projection bands",
+      "P_T = P₀×(1+μ±σ√(days/252)); μ from horizon+FinBERT edge; P(up) includes FinBERT prior",
+    period: "Anchors 3D·1W·2W·3W·1M (21d path); ±1σ shaded band",
     status: "implemented",
-    notes: "price-outlook.ts + ECharts dialog with crosshair. RSI mean-reversion bias.",
+    notes: "price-outlook.ts, finbert-edge.ts, ECharts band stack. Sprint D.",
   },
   {
     id: "outlook_buckets",

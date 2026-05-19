@@ -83,7 +83,7 @@ flowchart LR
 
 ---
 
-## Sprint C — Pipeline depth (queued)
+## Sprint C — Pipeline depth (implemented)
 
 **Outcome:** Score more text, weight by relevance/entity, score faster at scale.
 
@@ -99,7 +99,7 @@ flowchart LR
 
 ---
 
-## Sprint D — Price projection (queued)
+## Sprint D — Price projection (implemented)
 
 **Outcome:** FinBERT-calibrated edge drives `P_T` and P(up); charts show **intervals**, not a single deterministic line.
 

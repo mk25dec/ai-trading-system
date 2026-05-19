@@ -124,6 +124,7 @@ function TraderOutlookRow({
             candles={row.candles ?? []}
             decision={d}
             market={row.market}
+            news={row.news}
           />
         </TableCell>
         <TableCell>
