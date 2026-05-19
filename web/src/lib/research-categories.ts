@@ -1,4 +1,4 @@
-import type { CategoryScore, DecisionView, ResearchStockRow } from "@/lib/pipeline-api"
+import type { CategoryScore, DecisionView, HorizonOutlook, ResearchStockRow } from "@/lib/pipeline-api"
 import { resolveDecision } from "@/lib/decision-engine"
 
 /** v2 baseline categories from my-research.md §5 */
@@ -6,9 +6,36 @@ export interface ResearchCategoryDef {
   id: string
   label: string
   researchWeight: number
+  timeSensitivity: string
   /** Backend category ids merged into this row */
   backendIds: string[]
   implemented: boolean
+}
+
+export interface CategoryFormulaTerm {
+  label: string
+  weight: number
+  score: number
+  confidence: number
+  contribution: number
+  implemented: boolean
+}
+
+export interface CompositeFormulaBreakdown {
+  /** Engine composite (horizon blend) */
+  horizonBlend: {
+    short: HorizonOutlook
+    swing: HorizonOutlook
+    position: HorizonOutlook
+    alignBonus: number
+    riskPenalty: number
+    beforeClamp: number
+    composite: number
+  }
+  /** Research §3 category sum (implemented factors only) */
+  categorySum: number
+  categoryTerms: CategoryFormulaTerm[]
+  confidence: number
 }
 
 export const RESEARCH_CATEGORIES: ResearchCategoryDef[] = [
@@ -16,6 +43,7 @@ export const RESEARCH_CATEGORIES: ResearchCategoryDef[] = [
     id: "technical",
     label: "Technical momentum",
     researchWeight: 0.18,
+    timeSensitivity: "Very high",
     backendIds: ["technical"],
     implemented: true,
   },
@@ -23,6 +51,7 @@ export const RESEARCH_CATEGORIES: ResearchCategoryDef[] = [
     id: "trend",
     label: "Trend strength",
     researchWeight: 0.1,
+    timeSensitivity: "High",
     backendIds: ["trend"],
     implemented: true,
   },
@@ -30,6 +59,7 @@ export const RESEARCH_CATEGORIES: ResearchCategoryDef[] = [
     id: "fundamentals",
     label: "Fundamentals",
     researchWeight: 0.18,
+    timeSensitivity: "Low",
     backendIds: [],
     implemented: false,
   },
@@ -37,6 +67,7 @@ export const RESEARCH_CATEGORIES: ResearchCategoryDef[] = [
     id: "valuation",
     label: "Valuation",
     researchWeight: 0.1,
+    timeSensitivity: "Medium",
     backendIds: [],
     implemented: false,
   },
@@ -44,6 +75,7 @@ export const RESEARCH_CATEGORIES: ResearchCategoryDef[] = [
     id: "sentiment",
     label: "Sentiment",
     researchWeight: 0.12,
+    timeSensitivity: "Very high",
     backendIds: ["sentiment", "finbert"],
     implemented: true,
   },
@@ -51,6 +83,7 @@ export const RESEARCH_CATEGORIES: ResearchCategoryDef[] = [
     id: "earnings",
     label: "Earnings quality",
     researchWeight: 0.08,
+    timeSensitivity: "High",
     backendIds: [],
     implemented: false,
   },
@@ -58,6 +91,7 @@ export const RESEARCH_CATEGORIES: ResearchCategoryDef[] = [
     id: "regime",
     label: "Market regime",
     researchWeight: 0.08,
+    timeSensitivity: "High",
     backendIds: [],
     implemented: false,
   },
@@ -65,6 +99,7 @@ export const RESEARCH_CATEGORIES: ResearchCategoryDef[] = [
     id: "sector",
     label: "Sector strength",
     researchWeight: 0.05,
+    timeSensitivity: "Medium",
     backendIds: [],
     implemented: false,
   },
@@ -72,6 +107,7 @@ export const RESEARCH_CATEGORIES: ResearchCategoryDef[] = [
     id: "risk",
     label: "Risk analysis",
     researchWeight: 0.06,
+    timeSensitivity: "Very high",
     backendIds: ["risk"],
     implemented: true,
   },
@@ -79,6 +115,7 @@ export const RESEARCH_CATEGORIES: ResearchCategoryDef[] = [
     id: "liquidity",
     label: "Liquidity & flow",
     researchWeight: 0.03,
+    timeSensitivity: "High",
     backendIds: [],
     implemented: false,
   },
@@ -86,10 +123,20 @@ export const RESEARCH_CATEGORIES: ResearchCategoryDef[] = [
     id: "alignment",
     label: "Multi-timeframe alignment",
     researchWeight: 0.02,
+    timeSensitivity: "Critical",
     backendIds: [],
     implemented: true,
   },
 ]
+
+export const COMPOSITE_FORMULA_DOC = {
+  research:
+    "FinalScore(T) = Σ (CategoryScoreᵢ × CategoryWeightᵢ × Confidenceᵢ) − RiskPenalty(T) + RegimeAdjustment(T)",
+  engine:
+    "Composite = 0.45×Score₁W + 0.30×Score₃D + 0.25×Score₁M + AlignmentBonus − RiskPenalty",
+  display:
+    "Cell score maps signed factor s ∈ [−1,+1] to display = (s+1)×50 (50 = neutral). Contribution = s × weight × confidence × 100.",
+}
 
 export interface CategoryCell {
   score: number | null
@@ -105,6 +152,7 @@ export interface StockCategoryBreakdown {
   compositeScore: number
   compositeConfidence: number
   cells: Record<string, CategoryCell>
+  formula: CompositeFormulaBreakdown
 }
 
 function alignmentScore(alignment: string): { score: number; confidence: number } {
@@ -196,6 +244,104 @@ export function resolveCategoryCell(
   }
 }
 
+function alignBonusFromAlignment(alignment: string): number {
+  switch (alignment) {
+    case "aligned_bullish":
+      return 4
+    case "aligned_bearish":
+      return -4
+    case "divergent":
+      return -2
+    default:
+      return 0
+  }
+}
+
+function riskPenaltyFromLevel(level: string): number {
+  switch (level) {
+    case "high":
+      return 8
+    case "medium":
+      return 4
+    default:
+      return 0
+  }
+}
+
+const emptyHorizon = (id: string, label: string): HorizonOutlook => ({
+  id,
+  label,
+  score: 50,
+  outlook: "watch",
+  confidence: 0.35,
+})
+
+export function buildCompositeFormula(decision: DecisionView): CompositeFormulaBreakdown {
+  const horizons = decision.horizons ?? []
+  const short = horizons.find((h) => h.id === "short") ?? horizons[0] ?? emptyHorizon("short", "3D")
+  const swing = horizons.find((h) => h.id === "swing") ?? horizons[1] ?? emptyHorizon("swing", "1W")
+  const position =
+    horizons.find((h) => h.id === "position") ?? horizons[2] ?? emptyHorizon("position", "1M")
+
+  const alignBonus = alignBonusFromAlignment(decision.alignment)
+  const riskPenalty = riskPenaltyFromLevel(decision.riskLevel)
+  const beforeClamp =
+    swing.score * 0.45 + short.score * 0.3 + position.score * 0.25 + alignBonus - riskPenalty
+
+  const categoryTerms: CategoryFormulaTerm[] = RESEARCH_CATEGORIES.map((def) => {
+    const cell = resolveCategoryCell(def, decision)
+    return {
+      label: def.label,
+      weight: def.researchWeight,
+      score: cell.score ?? 0,
+      confidence: cell.confidence ?? 0,
+      contribution: cell.contribution ?? 0,
+      implemented: def.implemented && cell.score != null,
+    }
+  })
+
+  const categorySum = categoryTerms
+    .filter((t) => t.implemented)
+    .reduce((acc, t) => acc + t.contribution, 0)
+
+  return {
+    horizonBlend: {
+      short,
+      swing,
+      position,
+      alignBonus,
+      riskPenalty,
+      beforeClamp: Math.round(beforeClamp * 10) / 10,
+      composite: decision.compositeScore,
+    },
+    categorySum: Math.round(categorySum * 10) / 10,
+    categoryTerms,
+    confidence: decision.confidence,
+  }
+}
+
+/** Multi-line tooltip with substituted numeric values. */
+export function formatCompositeFormulaTooltip(f: CompositeFormulaBreakdown): string {
+  const { short, swing, position, alignBonus, riskPenalty, beforeClamp, composite } =
+    f.horizonBlend
+  const lines = [
+    "Engine composite (horizon blend):",
+    `  0.45×${swing.label} + 0.30×${short.label} + 0.25×${position.label} + align − risk`,
+    `  = 0.45×${swing.score.toFixed(1)} + 0.30×${short.score.toFixed(1)} + 0.25×${position.score.toFixed(1)} + (${alignBonus >= 0 ? "+" : ""}${alignBonus.toFixed(0)}) − ${riskPenalty.toFixed(0)}`,
+    `  = ${beforeClamp.toFixed(1)} → ${composite.toFixed(0)} (after overrides/clamp)`,
+    "",
+    "Research category sum (implemented):",
+    `  Σ (score × weight × confidence × 100) = ${f.categorySum.toFixed(1)}`,
+  ]
+  for (const t of f.categoryTerms.filter((x) => x.implemented)) {
+    lines.push(
+      `  ${t.label}: ${t.score >= 0 ? "+" : ""}${(t.score * 100).toFixed(0)}% × ${(t.weight * 100).toFixed(0)}% × ${(t.confidence * 100).toFixed(0)}% = ${t.contribution.toFixed(1)}`,
+    )
+  }
+  lines.push("", `Model confidence: ${(f.confidence * 100).toFixed(0)}%`)
+  return lines.join("\n")
+}
+
 export function buildStockCategoryBreakdown(row: ResearchStockRow): StockCategoryBreakdown {
   const decision = resolveDecision(row)
   const cells: Record<string, CategoryCell> = {}
@@ -204,12 +350,15 @@ export function buildStockCategoryBreakdown(row: ResearchStockRow): StockCategor
     cells[def.id] = resolveCategoryCell(def, decision)
   }
 
+  const formula = buildCompositeFormula(decision)
+
   return {
     symbol: row.symbol,
     name: row.name,
     compositeScore: decision.compositeScore,
     compositeConfidence: decision.confidence,
     cells,
+    formula,
   }
 }
 

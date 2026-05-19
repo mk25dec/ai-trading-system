@@ -133,7 +133,8 @@ export function FeaturesPage() {
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Trader outlook</CardTitle>
           <CardDescription>
-            Composite score, 3D / 1W / 1M horizons, news stance, and risk. Expand for drivers.
+            Composite score, 3D / 1W / 1M horizons, 3M price projection with P(up), news stance, and
+            risk. Expand for drivers.
           </CardDescription>
         </CardHeader>
         <CardContent className="overflow-x-auto p-0">
@@ -155,9 +156,8 @@ export function FeaturesPage() {
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Score basis by category</CardTitle>
           <CardDescription>
-            Research v2 category weights (my-research.md §5). Each cell is the factor on a 0–100 scale
-            (50 = neutral); the sub-line is model confidence. Em dash means not wired in the engine yet.
-            Σ contrib sums implemented categories using score × researchWeight × confidence.
+            Full category names, weights, and time sensitivity from my-research.md §5. Overall score
+            is column 2 — hover for the substituted formula. See notes above the table for equations.
           </CardDescription>
         </CardHeader>
         <CardContent className="overflow-x-auto p-0">

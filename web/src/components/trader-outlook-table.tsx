@@ -10,6 +10,7 @@ import {
 } from "lucide-react"
 import { DecisionHeroPanel } from "@/components/decision/decision-hero-panel"
 import { MiniSparkline } from "@/components/decision/mini-sparkline"
+import { PriceOutlookProjection } from "@/components/decision/price-outlook-projection"
 import { ScoreGauge } from "@/components/decision/score-gauge"
 import { HorizonOutlookBadge } from "@/components/horizon-outlook-badge"
 import { RecommendationBadge } from "@/components/recommendation-badge"
@@ -58,6 +59,7 @@ export function TraderOutlookTable({
           <TableHead className="w-8" />
           <TableHead>Symbol</TableHead>
           <TableHead className="w-[72px]">Chart</TableHead>
+          <TableHead className="min-w-[116px]">3M outlook</TableHead>
           <TableHead>Signal</TableHead>
           <TableHead className="text-right">Score</TableHead>
           <TableHead className="text-center">Horizons</TableHead>
@@ -80,7 +82,7 @@ export function TraderOutlookTable({
         ))}
         {rows.length === 0 && emptyMessage && (
           <TableRow>
-            <TableCell colSpan={11} className="py-12 text-center text-muted-foreground">
+            <TableCell colSpan={12} className="py-12 text-center text-muted-foreground">
               {emptyMessage}
             </TableCell>
           </TableRow>
@@ -137,6 +139,14 @@ function TraderOutlookRow({
         </TableCell>
         <TableCell>
           <MiniSparkline candles={row.candles ?? []} />
+        </TableCell>
+        <TableCell onClick={(e) => e.stopPropagation()}>
+          <PriceOutlookProjection
+            symbol={row.symbol}
+            candles={row.candles ?? []}
+            decision={d}
+            market={row.market}
+          />
         </TableCell>
         <TableCell>
           <RecommendationBadge action={action} />
@@ -216,7 +226,7 @@ function TraderOutlookRow({
       </TableRow>
       {open && (
         <TableRow className="hover:bg-transparent">
-          <TableCell colSpan={11} className={cn("border-l-4 bg-muted/15 p-0", actionAccent(action))}>
+          <TableCell colSpan={12} className={cn("border-l-4 bg-muted/15 p-0", actionAccent(action))}>
             <div className="space-y-4 p-5">
               <DecisionHeroPanel decision={d} />
               {renderDetail ? (
