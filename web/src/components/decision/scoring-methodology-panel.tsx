@@ -27,21 +27,26 @@ function StatusBadge({ status }: { status: "implemented" | "planned" | "research
   )
 }
 
-export function ScoringMethodologyPanel() {
+export function ScoringMethodologyPanel({ showHeader = true }: { showHeader?: boolean }) {
   return (
-    <section className="border-b bg-muted/10" aria-labelledby="calculation-rules-heading">
-      <div className="border-b border-border/50 bg-muted/20 px-4 py-4">
-        <h2
-          id="calculation-rules-heading"
-          className="text-base font-semibold tracking-tight text-foreground"
-        >
-          Calculation rules
-        </h2>
-        <p className="mt-1 max-w-3xl text-xs leading-relaxed text-muted-foreground">
-          How overall and category scores are derived: equations, where each input comes from, and
-          baseline category weights (my-research.md).
-        </p>
-      </div>
+    <section
+      className={cn(showHeader && "border-b bg-muted/10")}
+      aria-labelledby={showHeader ? "calculation-rules-heading" : undefined}
+    >
+      {showHeader && (
+        <div className="border-b border-border/50 bg-muted/20 px-4 py-4">
+          <h2
+            id="calculation-rules-heading"
+            className="text-base font-semibold tracking-tight text-foreground"
+          >
+            Calculation rules
+          </h2>
+          <p className="mt-1 max-w-3xl text-xs leading-relaxed text-muted-foreground">
+            How overall and category scores are derived: equations, where each input comes from, and
+            baseline category weights (my-research.md).
+          </p>
+        </div>
+      )}
 
       <div className="space-y-8 px-4 py-6">
         <section aria-labelledby="calc-rules-formulas">

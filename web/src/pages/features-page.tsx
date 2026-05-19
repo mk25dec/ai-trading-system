@@ -133,7 +133,7 @@ export function FeaturesPage() {
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Trader outlook</CardTitle>
           <CardDescription>
-            Composite score, 3D / 1W / 1M horizons, 3M price projection with P(up), news stance, and
+            Composite score, 3D / 1W / 1M horizons, multi-horizon price projection (click chart), news stance, and
             risk. Expand for drivers.
           </CardDescription>
         </CardHeader>
@@ -156,8 +156,8 @@ export function FeaturesPage() {
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Score basis by category</CardTitle>
           <CardDescription>
-            Calculation rules above the grid (formulas, data sources, category weights). Per-symbol
-            scores below — hover Overall for numeric substitution.
+            Per-symbol category scores in the grid — hover Overall for numeric substitution. Expand
+            Calculation rules below for formulas, data sources, and weights.
           </CardDescription>
         </CardHeader>
         <CardContent className="overflow-x-auto p-0">

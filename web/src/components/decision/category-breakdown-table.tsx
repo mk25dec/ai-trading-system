@@ -12,7 +12,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { ScoringMethodologyPanel } from "@/components/decision/scoring-methodology-panel"
+import { CalculationRulesCollapsible } from "@/components/decision/calculation-rules-collapsible"
 import {
   RESEARCH_CATEGORIES,
   buildStockCategoryBreakdown,
@@ -34,9 +34,7 @@ export function CategoryBreakdownTable({
   const breakdowns = rows.map(buildStockCategoryBreakdown)
 
   return (
-    <div className="space-y-4">
-      <ScoringMethodologyPanel />
-
+    <div>
       <TooltipProvider>
         <div className="overflow-x-auto">
           <Table className="min-w-max">
@@ -111,13 +109,14 @@ export function CategoryBreakdownTable({
           </Table>
         </div>
       </TooltipProvider>
+
+      <CalculationRulesCollapsible />
     </div>
   )
 }
 
-
 function CategoryBreakdownRow({ breakdown }: { breakdown: StockCategoryBreakdown }) {
-  const compositeSpectrum = scoreSpectrum(breakdown.compositeScore)
+  const compositeSpectrum = scoreSpectrum(breakdown.compositeScore, { noData: breakdown.unscored })
   const contribSum = sumImplementedContributions(breakdown)
   const formulaTip = formatCompositeFormulaTooltip(breakdown.formula)
 
@@ -141,7 +140,7 @@ function CategoryBreakdownRow({ breakdown }: { breakdown: StockCategoryBreakdown
                   compositeSpectrum.text,
                 )}
               >
-                {breakdown.compositeScore.toFixed(0)}
+                {breakdown.unscored ? "—" : breakdown.compositeScore.toFixed(0)}
               </button>
             }
           />

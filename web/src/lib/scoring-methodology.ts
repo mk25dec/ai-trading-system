@@ -32,10 +32,11 @@ export const SCORING_FORMULAS: FormulaEntry[] = [
   {
     id: "horizon_score",
     name: "Horizon score (implemented)",
-    expression: "Score₁₀₀ = sigmoid(raw × 1.15) × 100,  raw = Σ categoryᵢ × weightᵢ",
+    expression:
+      "Score₁₀₀ = sigmoid(raw × 1.15) × 100 if Σ(conf×weight) ≥ 0.08, else 0",
     period: "3D · 1W · 1M (distinct sentiment windows per horizon)",
     status: "implemented",
-    notes: "api/internal/services/decision_engine.go — scoreHorizon",
+    notes: "No signal strength → 0 (never neutral 50 without data). decision_engine.go",
   },
   {
     id: "composite",
@@ -94,12 +95,13 @@ export const SCORING_FORMULAS: FormulaEntry[] = [
     notes: "decision_news.go — falls back to neutral if articles exist but unscored.",
   },
   {
-    id: "price_3m",
-    name: "3M price outlook P(up)",
-    expression: "P(up) = logistic(composite) × 0.55 + (Score₁M/100) × 0.35 + confidence × 0.1",
-    period: "~63 trading days history + 21-day projection",
+    id: "price_projection",
+    name: "Multi-horizon price projection",
+    expression:
+      "P_T = P₀×(1+edge×σ√(days/252)+trend); P(up)=logistic×0.5+prior×0.35+conf×0.1",
+    period: "Anchors 3D·1W·2W·3W·1M (21d path); grey projection bands",
     status: "implemented",
-    notes: "Linear trend on last 20 sessions + 5d drift; not a trade signal alone.",
+    notes: "price-outlook.ts + ECharts dialog with crosshair. RSI mean-reversion bias.",
   },
   {
     id: "outlook_buckets",

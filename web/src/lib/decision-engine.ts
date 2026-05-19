@@ -87,6 +87,36 @@ function inferNewsFromRow(row: ResearchStockRow): { stance: string; confidence?:
 }
 
 function fallbackDecision(row: ResearchStockRow): DecisionView {
+  const hasMarket =
+    row.market != null &&
+    (row.market.priceChange24h != null ||
+      row.market.rsi != null ||
+      row.market.volatility != null)
+  const hasNews =
+    row.news != null &&
+    ((row.news.newsCount24h ?? 0) > 0 ||
+      row.news.avgSentiment24h != null ||
+      finbertForRow(row) != null)
+  if (!hasMarket && !hasNews) {
+    return {
+      primaryAction: "watch",
+      primaryOutlook: "No data",
+      compositeScore: 0,
+      confidence: 0.15,
+      riskLevel: "medium",
+      alignment: "mixed",
+      conflict: false,
+      newsStance: "no_news",
+      priceTrend: "unknown",
+      drivers: ["Insufficient data — score is 0 until market or news features load"],
+      horizons: [
+        { id: "short", label: "3D", score: 0, outlook: "watch", confidence: 0.15 },
+        { id: "swing", label: "1W", score: 0, outlook: "watch", confidence: 0.15 },
+        { id: "position", label: "1M", score: 0, outlook: "watch", confidence: 0.15 },
+      ],
+    }
+  }
+
   const composite = Math.round(Math.min(100, Math.max(0, 50 + row.score * 25)) * 10) / 10
   const outlook = scoreToOutlook(composite)
   const horizon: HorizonOutlook = {

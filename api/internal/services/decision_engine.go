@@ -305,6 +305,14 @@ func scoreHorizon(
 		raw += risk * w.risk
 	}
 
+	strength := categorySignalStrength(cats)
+	if strength < 0.08 {
+		return models.HorizonOutlook{
+			ID: id, Label: label, Score: 0, Outlook: "watch",
+			Confidence: 0.15,
+		}
+	}
+
 	score100 := scoreFromSigmoid(raw)
 
 	conf := horizonConfidence(mf, nf, cats)
@@ -342,6 +350,19 @@ func horizonSentiment(nf *models.NewsFeatures, sw sentimentWindow) float64 {
 		return *s
 	}
 	return 0
+}
+
+// categorySignalStrength is Σ(confidence × weight); below ~0.08 we treat horizon as unscored (0, not neutral 50).
+func categorySignalStrength(cats []models.CategoryScore) float64 {
+	var s float64
+	for _, c := range cats {
+		w := c.Weight
+		if w <= 0 {
+			w = 1
+		}
+		s += c.Confidence * w
+	}
+	return s
 }
 
 func weightedCategory(cats []models.CategoryScore, id string, scale float64) float64 {
@@ -621,7 +642,7 @@ func mean(vals []float64) float64 {
 }
 
 func hasScorableInputs(mf *models.MarketFeatures, nf *models.NewsFeatures) bool {
-	if mf != nil {
+	if mf != nil && marketHasSignal(mf) {
 		return true
 	}
 	if nf == nil {
@@ -638,6 +659,19 @@ func hasScorableInputs(mf *models.MarketFeatures, nf *models.NewsFeatures) bool 
 	}
 	fb := nf.Finbert
 	return fb.WeightedSentiment24h != nil || fb.AvgProbPositive24h != nil || fb.PositiveLabelPct24h != nil
+}
+
+func marketHasSignal(mf *models.MarketFeatures) bool {
+	if mf == nil {
+		return false
+	}
+	if mf.PriceChange24h != nil || mf.PriceChange5d != nil || mf.RSI != nil {
+		return true
+	}
+	if mf.Volatility != nil || mf.VolumeRatio != nil || mf.DistanceSMA20 != nil {
+		return true
+	}
+	return false
 }
 
 func insufficientDecisionView() models.DecisionView {

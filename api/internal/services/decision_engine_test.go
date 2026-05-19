@@ -97,6 +97,18 @@ func TestNewsStance_articlesNoScoreYet(t *testing.T) {
 	}
 }
 
+func TestComputeDecision_emptyMarketStructNotScorable(t *testing.T) {
+	d := ComputeDecision("EMPTY", &models.MarketFeatures{}, nil)
+	if d.CompositeScore != 0 {
+		t.Fatalf("empty market features should yield composite 0, got %.1f", d.CompositeScore)
+	}
+	for _, h := range d.Horizons {
+		if h.Score != 0 {
+			t.Fatalf("horizon %s should be 0 without signal, got %.1f", h.Label, h.Score)
+		}
+	}
+}
+
 func TestComputeDecision_insufficientWithoutMarketOrNews(t *testing.T) {
 	d := ComputeDecision("FAKE", nil, nil)
 	if d.CompositeScore != 0 {

@@ -188,6 +188,7 @@ export interface StockCategoryBreakdown {
   name: string
   compositeScore: number
   compositeConfidence: number
+  unscored: boolean
   cells: Record<string, CategoryCell>
   formula: CompositeFormulaBreakdown
 }
@@ -231,9 +232,21 @@ function mergeBackendScores(
   }
 }
 
-/** Map signed factor score (−1…+1) to 0–100 display scale. */
-export function signedToDisplay(score: number): number {
+/** Map signed factor score (−1…+1) to 0–100 display scale. Returns null when unscored. */
+export function signedToDisplay(score: number, confidence?: number | null): number | null {
+  if (confidence != null && confidence < 0.12) {
+    return null
+  }
   return Math.round(clamp((score + 1) * 50, 0, 100) * 10) / 10
+}
+
+export function isUnscoredDecision(decision: DecisionView): boolean {
+  return (
+    decision.compositeScore <= 0 &&
+    (decision.confidence ?? 0) <= 0.2 &&
+    (decision.primaryOutlook === "No data" ||
+      (decision.horizons?.every((h) => h.score <= 0) ?? true))
+  )
 }
 
 function clamp(v: number, lo: number, hi: number): number {
@@ -262,13 +275,13 @@ export function resolveCategoryCell(
       score,
       confidence,
       contribution: Math.round(contribution * 10) / 10,
-      displayScore: signedToDisplay(score),
+      displayScore: signedToDisplay(score, confidence),
     }
   }
 
   const byId = new Map((decision.categories ?? []).map((c) => [c.id, c]))
   const merged = mergeBackendScores(def.backendIds, byId)
-  if (!merged) {
+  if (!merged || merged.confidence < 0.12) {
     return empty
   }
 
@@ -277,7 +290,7 @@ export function resolveCategoryCell(
     score: merged.score,
     confidence: merged.confidence,
     contribution: Math.round(contribution * 10) / 10,
-    displayScore: signedToDisplay(merged.score),
+    displayScore: signedToDisplay(merged.score, merged.confidence),
   }
 }
 
@@ -308,9 +321,9 @@ function riskPenaltyFromLevel(level: string): number {
 const emptyHorizon = (id: string, label: string): HorizonOutlook => ({
   id,
   label,
-  score: 50,
+  score: 0,
   outlook: "watch",
-  confidence: 0.35,
+  confidence: 0.15,
 })
 
 export function buildCompositeFormula(decision: DecisionView): CompositeFormulaBreakdown {
@@ -394,6 +407,7 @@ export function buildStockCategoryBreakdown(row: ResearchStockRow): StockCategor
     name: row.name,
     compositeScore: decision.compositeScore,
     compositeConfidence: decision.confidence,
+    unscored: isUnscoredDecision(decision),
     cells,
     formula,
   }

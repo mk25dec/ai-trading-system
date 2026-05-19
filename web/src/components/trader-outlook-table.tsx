@@ -59,7 +59,7 @@ export function TraderOutlookTable({
           <TableHead className="w-8" />
           <TableHead>Symbol</TableHead>
           <TableHead className="w-[72px]">Chart</TableHead>
-          <TableHead className="min-w-[116px]">3M outlook</TableHead>
+          <TableHead className="min-w-[120px]">Price outlook</TableHead>
           <TableHead>Signal</TableHead>
           <TableHead className="text-right">Score</TableHead>
           <TableHead className="text-center">Horizons</TableHead>
@@ -143,6 +143,7 @@ function TraderOutlookRow({
         <TableCell onClick={(e) => e.stopPropagation()}>
           <PriceOutlookProjection
             symbol={row.symbol}
+            name={row.name}
             candles={row.candles ?? []}
             decision={d}
             market={row.market}
@@ -153,7 +154,11 @@ function TraderOutlookRow({
           <p className="mt-1 text-[10px] font-medium text-muted-foreground">{signalSubline(d)}</p>
         </TableCell>
         <TableCell className="text-right">
-          <ScoreGauge score={d.compositeScore} size="sm" />
+          <ScoreGauge
+            score={d.compositeScore}
+            size="sm"
+            noData={d.compositeScore <= 0 && d.confidence <= 0.2}
+          />
         </TableCell>
         <TableCell>
           <div className="flex justify-center gap-1.5">

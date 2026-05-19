@@ -6,23 +6,25 @@ export function ScoreGauge({
   confidence,
   size = "md",
   showLabel = true,
+  noData = false,
 }: {
   score: number
   confidence?: number
   size?: "sm" | "md" | "lg"
   showLabel?: boolean
+  noData?: boolean
 }) {
-  const spec = scoreSpectrum(score)
-  const clamped = Math.min(100, Math.max(0, score))
+  const spec = scoreSpectrum(score, { noData })
+  const clamped = noData ? 0 : Math.min(100, Math.max(0, score))
 
   if (size === "sm") {
     return (
       <div className="min-w-[72px] space-y-1">
         <div className={cn("flex items-baseline gap-0.5", spec.text)}>
           <span className="font-mono text-lg font-bold tabular-nums leading-none">
-            {clamped.toFixed(0)}
+            {noData ? "—" : clamped.toFixed(0)}
           </span>
-          <span className="text-[10px] text-muted-foreground">/100</span>
+          {!noData && <span className="text-[10px] text-muted-foreground">/100</span>}
         </div>
         <div className={cn("h-1.5 w-full overflow-hidden rounded-full", spec.track)}>
           <div

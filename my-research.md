@@ -36,7 +36,7 @@ FinalScore(T) = Σᵢ (CategoryScoreᵢ(T) × CategoryWeightᵢ × Confidenceᵢ
 
 | Name | Formula | Period / scope |
 |------|---------|----------------|
-| Horizon score | `Score₁₀₀ = sigmoid(raw × 1.15) × 100`, `raw = Σ categoryᵢ × weightᵢ` | 3D · 1W · 1M (distinct sentiment windows) |
+| Horizon score | `Score₁₀₀ = sigmoid(raw × 1.15) × 100` if `Σ(conf×weight) ≥ 0.08`, else **0** (no fake 50) | 3D · 1W · 1M (distinct sentiment windows) |
 | Overall composite | `Composite = 0.45×Score₁W + 0.30×Score₃D + 0.25×Score₁M + AlignmentBonus − RiskPenalty` | Cross-horizon trader score (risk: high=8, med=4; align: ±4 / −2) |
 | Category contribution | `contribᵢ = CategoryScoreᵢ × Weightᵢ × Confidenceᵢ × 100` | Table cells; display = `(score+1)×50` |
 | Sentiment decay | `AdjustedSentiment = Sentiment × e^(−k·t)` | 1h / 4h / 24h windows; half-lives 6h, 12h, 24h |
@@ -44,7 +44,9 @@ FinalScore(T) = Σᵢ (CategoryScoreᵢ(T) × CategoryWeightᵢ × Confidenceᵢ
 | News sample confidence | `conf = 1 − e^(−n/λ)`, λ=5 articles | Combined with model confidence (geometric mean) |
 | Technical mapping | `RSI signal = (50−RSI)/50`; price/SMA via `tanh(Δ%/scale)` | Latest daily bar |
 | News stance | `score = Σ window(weight × decay × sentiment)`; stance thresholds ±0.2 | `decision_news.go` |
-| 3M price outlook P(up) | `logistic(composite)×0.55 + (Score₁M/100)×0.35 + confidence×0.1` | ~63 sessions history + 21-day projection |
+| Price projection P(up) | `logistic(composite)×0.5 + horizonPrior×0.35 + conf×0.1 + momentum` | 63d history + 21d path |
+| Multi-horizon path | `P_T = P₀ × (1 + edge×σ×√(days/252) + trend)` per anchor T ∈ {3D,1W,2W,3W,1M} | Grey bands on chart; ECharts popup |
+| Zero-data policy | No market signal **and** no news → composite **0**, display **—**, not 50 | `hasScorableInputs` + `categorySignalStrength` |
 | Outlook buckets | ≥78 Strong buy · ≥62 Buy · ≥45 Watch · ≥32 Sell · under 32 Avoid | Applied to 0–100 scores |
 
 ---

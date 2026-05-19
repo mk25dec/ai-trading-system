@@ -1,7 +1,21 @@
 import type { HorizonOutlook, OutlookLabel, RecommendationAction } from "@/lib/pipeline-api"
 
+/** Unscored / no data — not the same as neutral 50. */
+export function noDataSpectrum() {
+  return {
+    text: "text-muted-foreground",
+    bg: "bg-muted/50",
+    border: "border-border/60",
+    fill: "#94a3b8",
+    track: "bg-muted/40",
+  }
+}
+
 /** 0–100 composite → semantic color classes */
-export function scoreSpectrum(score: number) {
+export function scoreSpectrum(score: number, opts?: { noData?: boolean }) {
+  if (opts?.noData) {
+    return noDataSpectrum()
+  }
   if (score >= 75) {
     return {
       text: "text-emerald-600 dark:text-emerald-400",
