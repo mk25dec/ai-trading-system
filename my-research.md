@@ -2,9 +2,98 @@
 
 > **Goal:** Replace a single static score with a **Multi-Horizon Decision Engine** that produces consistent, actionable signals per timeframe.
 
+> **In-app reference:** Features → *Score basis by category* → **Calculation rules** (formulas, input sources, category weights) above the per-symbol grid.
+
 ---
 
-## 1. Problem: One Score, Conflicting Signals
+##  Calculation rules
+
+How scores are computed: equations, data feeding them, and baseline category weights.
+
+### 1. Mathematical formulas
+
+Score calculation over a given time period — research target and formulas **implemented** in `api/internal/services/decision_engine.go`, `decision_math.go`, and `decision_news.go`.
+
+#### 1.1 Final score per timeframe T (research target)
+
+```
+FinalScore(T) = Σᵢ (CategoryScoreᵢ(T) × CategoryWeightᵢ × Confidenceᵢ)
+                − RiskPenalty(T)
+                + RegimeAdjustment(T)
+```
+
+| Term | Role |
+|------|------|
+| **T** | Timeframe (3D, 1W, 1M, …) |
+| **CategoryWeightᵢ** | Base importance (category weights below) |
+| **Confidenceᵢ** | Model certainty — low confidence → less contribution |
+| **RiskPenalty(T)** | Volatility, drawdown, liquidity, gap, beta, earnings risk |
+| **RegimeAdjustment(T)** | Bull / bear / sideways / high-vol multiplier |
+
+`RegimeAdjustment` is not wired yet; horizons and composite below are live.
+
+#### 1.2 Implemented formulas
+
+| Name | Formula | Period / scope |
+|------|---------|----------------|
+| Horizon score | `Score₁₀₀ = sigmoid(raw × 1.15) × 100`, `raw = Σ categoryᵢ × weightᵢ` | 3D · 1W · 1M (distinct sentiment windows) |
+| Overall composite | `Composite = 0.45×Score₁W + 0.30×Score₃D + 0.25×Score₁M + AlignmentBonus − RiskPenalty` | Cross-horizon trader score (risk: high=8, med=4; align: ±4 / −2) |
+| Category contribution | `contribᵢ = CategoryScoreᵢ × Weightᵢ × Confidenceᵢ × 100` | Table cells; display = `(score+1)×50` |
+| Sentiment decay | `AdjustedSentiment = Sentiment × e^(−k·t)` | 1h / 4h / 24h windows; half-lives 6h, 12h, 24h |
+| FinBERT confidence | Wilson lower bound on positive label proportion (z=1.96) | 24h article window |
+| News sample confidence | `conf = 1 − e^(−n/λ)`, λ=5 articles | Combined with model confidence (geometric mean) |
+| Technical mapping | `RSI signal = (50−RSI)/50`; price/SMA via `tanh(Δ%/scale)` | Latest daily bar |
+| News stance | `score = Σ window(weight × decay × sentiment)`; stance thresholds ±0.2 | `decision_news.go` |
+| 3M price outlook P(up) | `logistic(composite)×0.55 + (Score₁M/100)×0.35 + confidence×0.1` | ~63 sessions history + 21-day projection |
+| Outlook buckets | ≥78 Strong buy · ≥62 Buy · ≥45 Watch · ≥32 Sell · under 32 Avoid | Applied to 0–100 scores |
+
+---
+
+### 1.3 Formula inputs — information sources
+
+Symbols and fields fed into the equations above; where each value originates in this system.
+
+| Symbol | Input | Used in | Data source | Refresh |
+|--------|-------|---------|-------------|---------|
+| P₀, P₂₄h, P₅d | Price levels & returns | Technical, trend, risk | Alpaca daily bars (1Day) | Refresh data |
+| RSI₁₄ | Relative strength index | Technical momentum | Computed from Alpaca closes | Refresh data |
+| σ₁₀d | Volatility (10d) | Risk penalty, 3M projection | `market_features.volatility` | Refresh data |
+| Vol ratio | Volume vs average | Technical (breakout bias) | `market_features.volumeRatio` | Refresh data |
+| SMA20 dist | Distance to SMA20 | Technical momentum | `market_features.distanceSma20` | Refresh data |
+| S₁h,S₄h,S₂₄h | Signed news sentiment | Sentiment, FinBERT, horizons | `news_features` avg_sentiment_* | Refresh + FinBERT backlog |
+| N₁h,N₄h,N₂₄h | Article counts | Sample confidence, coverage | `news_features` news_count_* | News ingest |
+| P+,P−,P₀ | FinBERT softmax means | FinBERT category, news stance | `news_features.finbert` avg_prob_* | FinBERT on headlines |
+| Label % | FinBERT label proportions | FinBERT / sentiment fallback | Aggregated article labels 24h | FinBERT on headlines |
+| Spike± | News spike flags | Overrides, risk, drivers | `positive/negative_news_spike` | ≥3 articles in 1h |
+| H₃D,H₁W,H₁M | Horizon scores | Composite, alignment | `decision_engine` horizons | Each board load |
+| Align | Horizon alignment | Alignment bonus, category row | Compare 3D/1W/1M outlooks | Derived |
+
+---
+
+### 1.4 Category weights (v2 baseline)
+
+| Category | Weight | Time sensitivity | Key inputs | Models / systems | Live in engine |
+|----------|--------|------------------|------------|------------------|----------------|
+| Technical momentum | 18% | Very high | RSI, MACD, EMA, VWAP, ATR | XGBoost, LightGBM, TFT | Yes |
+| Trend strength | 10% | High | HH/HL, ADX | LSTM, Transformers | Yes |
+| Fundamentals | 18% | Low | Revenue, EPS, FCF, ROIC | LLM finance agent | — |
+| Valuation | 10% | Medium | P/E, PEG, DCF | Regression + LLM | — |
+| Sentiment | 12% | Very high | News, social, filings | FinBERT, FinGPT | Yes |
+| Earnings quality | 8% | High | Guidance, margins | FinGPT, Qwen | — |
+| Market regime | 8% | High | VIX, rates, SPY trend | Regime classifier | Partial (risk/regime labels) |
+| Sector strength | 5% | Medium | Relative strength | XGBoost | — |
+| Risk analysis | 6% | Very high | Volatility, drawdown | Risk engine | Yes |
+| Liquidity & flow | 3% | High | Volume, options flow | Order-flow models | Partial (volume ratio) |
+| Multi-timeframe alignment | 2% | Critical | Cross-horizon agreement | Meta engine | Yes |
+
+**Total:** 100% — tune per timeframe via time-sensitivity (technical ↑ on 3D, fundamentals ↑ on 1Y when added).
+
+---
+
+
+####  EXTRA INFO
+
+## 4. Problem: One Score, Conflicting Signals
 
 Without timeframe awareness, the same stock can contradict itself:
 
@@ -18,7 +107,7 @@ A professional engine must answer: **Score(stock, timeframe)** — not one numbe
 
 ---
 
-## 2. Core Concept: Score Matrix
+## 5. Core Concept: Score Matrix
 
 ### Timeframes
 
@@ -45,29 +134,11 @@ Each cell drives outlook labels (BUY / WATCH / SELL / STRONG BUY) for that horiz
 
 ---
 
-## 3. Scoring Formula (per timeframe T)
+## 6. Required Components (beyond timeframes)
 
-```
-FinalScore(T) = Σ (CategoryScore_i(T) × CategoryWeight_i × Confidence_i)
-                − RiskPenalty(T)
-                + RegimeAdjustment(T)
-```
+Per-timeframe scoring uses **Calculation rules → Final score per timeframe T**; apply **timeframe-specific weights** where category sensitivity differs (e.g. technical ↑ for 3D, fundamentals ↑ for 1Y). Category baselines are under **Category weights (v2 baseline)**.
 
-| Term | Role |
-|------|------|
-| **T** | Timeframe (3D, 1W, 1M, …) |
-| **CategoryWeight_i** | Base importance of category (see §6) |
-| **Confidence_i** | Model certainty — low confidence → less contribution |
-| **RiskPenalty(T)** | Volatility, drawdown, liquidity, gap, beta, earnings risk |
-| **RegimeAdjustment(T)** | Bull / bear / sideways / high-vol multiplier |
-
-Also apply **timeframe-specific weights** where category sensitivity differs (e.g. technical ↑ for 3D, fundamentals ↑ for 1Y).
-
----
-
-## 4. Required Components (beyond timeframes)
-
-### 4.1 Confidence (mandatory)
+### 6.1 Confidence (mandatory)
 
 Never emit BUY/SELL without confidence. Example:
 
@@ -78,7 +149,7 @@ Never emit BUY/SELL without confidence. Example:
 
 Low-confidence inputs are down-weighted in the sum.
 
-### 4.2 Market regime
+### 6.2 Market regime
 
 | Regime | Effect |
 |--------|--------|
@@ -87,7 +158,7 @@ Low-confidence inputs are down-weighted in the sum.
 | Sideways | Mean-reversion favored |
 | High volatility | Reduce leverage / size |
 
-### 4.3 Signal freshness (decay)
+### 6.3 Signal freshness (decay)
 
 ```
 AdjustedSentiment = Sentiment × e^(-kt)
@@ -95,11 +166,11 @@ AdjustedSentiment = Sentiment × e^(-kt)
 
 Recent news (hours) matters; stale news (weeks) should fade.
 
-### 4.4 Risk-adjusted scoring
+### 6.4 Risk-adjusted scoring
 
 Penalize high score + high risk: drawdown, liquidity, gaps, beta, earnings-event risk.
 
-### 4.5 Position style (optional weight profiles)
+### 6.5 Position style (optional weight profiles)
 
 | Style | Emphasis |
 |-------|----------|
@@ -110,37 +181,17 @@ Penalize high score + high risk: drawdown, liquidity, gaps, beta, earnings-event
 
 One universal weight vector is weaker than style-specific profiles.
 
-### 4.6 Multi-timeframe agreement (meta signal)
+### 6.6 Multi-timeframe agreement (meta signal)
 
 **Aligned (conviction ↑):** 3D/1W/2W/1M all BUY.
 
 **Divergent (interpret context):** 3D SELL + 1M BUY → short-term pullback in long-term uptrend.
 
-Use alignment as a dedicated category or meta-engine feature (~2% weight in table below).
+Use alignment as a dedicated category or meta-engine feature (~2% weight in **Category weights**).
 
 ---
 
-## 5. Category Weights (v2 baseline)
-
-| Category | Weight | Time sensitivity | Key inputs | Models / systems |
-|----------|--------|------------------|------------|------------------|
-| Technical momentum | 18% | Very high | RSI, MACD, EMA, VWAP, ATR | XGBoost, LightGBM, TFT |
-| Trend strength | 10% | High | HH/HL, ADX | LSTM, Transformers |
-| Fundamentals | 18% | Low | Revenue, EPS, FCF, ROIC | LLM finance agent |
-| Valuation | 10% | Medium | P/E, PEG, DCF | Regression + LLM |
-| Sentiment | 12% | Very high | News, social, filings | FinBERT, FinGPT |
-| Earnings quality | 8% | High | Guidance, margins | FinGPT, Qwen |
-| Market regime | 8% | High | VIX, rates, SPY trend | Regime classifier |
-| Sector strength | 5% | Medium | Relative strength | XGBoost |
-| Risk analysis | 6% | Very high | Volatility, drawdown | Risk engine |
-| Liquidity & flow | 3% | High | Volume, options flow | Order-flow models |
-| Multi-timeframe alignment | 2% | Critical | Cross-horizon agreement | Meta engine |
-
-**Total:** 100% — tune per timeframe via time-sensitivity column.
-
----
-
-## 6. Engine Outputs (per stock)
+## 7. Engine Outputs (per stock)
 
 | Output | Meaning |
 |--------|---------|
@@ -171,7 +222,7 @@ Use alignment as a dedicated category or meta-engine feature (~2% weight in tabl
 
 ---
 
-## 7. Model Architecture (layers)
+## 8. Model Architecture (layers)
 
 ```
 Layer 1 — Data collection
@@ -194,7 +245,7 @@ Layer 4 — Meta Decision Engine  ← most important
 
 ---
 
-## 8. Next upgrade: dynamic weights
+## 9. Next upgrade: dynamic weights
 
 Static weights are a baseline. Adjust by context:
 
@@ -208,7 +259,7 @@ Implement as rules or a small model over regime + calendar features.
 
 ---
 
-## 9. Implementation approach (suggested order)
+## 10. Implementation approach (suggested order)
 
 1. **Define timeframes** in API/schema: `3D`, `1W`, `2W`, `1M`, `3M`, `1Y`.
 2. **Compute category scores per T** using existing features (technical, sentiment/FinBERT, etc.).
@@ -222,7 +273,7 @@ Implement as rules or a small model over regime + calendar features.
 
 ---
 
-## 10. Design principles
+## 11. Design principles
 
 - **Multi-horizon first** — one row per timeframe in the score matrix.
 - **No signal without confidence** — every BUY/SELL carries certainty.
