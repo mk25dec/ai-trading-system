@@ -39,6 +39,14 @@ func main() {
 		os.Exit(1)
 	}
 
+	calPath := os.Getenv("CALIBRATION_CONFIG")
+	if calPath == "" {
+		calPath = "config/calibration.json"
+	}
+	if err := services.LoadCalibrationParamsFromFile(calPath); err != nil && !os.IsNotExist(err) {
+		slog.Warn("calibration config", "path", calPath, "err", err)
+	}
+
 	var pgReady atomic.Bool
 	var duckReady atomic.Bool
 

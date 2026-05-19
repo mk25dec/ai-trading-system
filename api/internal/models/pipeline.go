@@ -128,6 +128,12 @@ type SymbolRow struct {
 	UpdatedAt time.Time      `json:"updatedAt"`
 }
 
+// DailyClose is a single daily bar close for calibration backtests.
+type DailyClose struct {
+	Timestamp time.Time `json:"timestamp"`
+	Close     float64   `json:"close"`
+}
+
 type MarketCandle struct {
 	Symbol    string    `json:"symbol"`
 	Timeframe string    `json:"timeframe"`

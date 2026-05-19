@@ -49,6 +49,10 @@ FinalScore(T) = Σᵢ (CategoryScoreᵢ(T) × CategoryWeightᵢ × Confidenceᵢ
 | Zero-data policy | No market signal **and** no news → composite **0**, display **—**, not 50 | `hasScorableInputs` + `categorySignalStrength` |
 | Outlook buckets | 78–100 Strong buy · 62–77.99 Buy · 45–61.99 Watch · 32–44.99 Sell · 0–31.99 Avoid | See **§1.5 master table**; same for horizons + composite |
 
+#### Calibrated constants (Sprint A)
+
+Tunable values live in `config/calibration.json` (loaded by API via `CALIBRATION_CONFIG`). Re-fit with `go run ./cmd/calibrate/ -optimize`. Web P(up) uses matching constants in `web/src/lib/calibration.ts`.
+
 ### 1.5 Trader signal table (outlook vs trade action)
 
 The **Trader outlook** column shows two related outputs from `ComputeDecision` in `decision_engine.go`:

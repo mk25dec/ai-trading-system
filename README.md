@@ -40,6 +40,14 @@ export CORS_ORIGIN=http://localhost:5173
 go run ./cmd/server
 ```
 
+Calibration backtest (optional, requires snapshots + candles in Postgres):
+
+```bash
+cd api && go run ./cmd/calibrate/ -since 720h -config ../config/calibration.json
+```
+
+See `docs/runbooks/calibration-backtest.md`.
+
 4. Run dashboard:
 
 ```bash

@@ -9,7 +9,8 @@ func sigmoid(x float64) float64 {
 
 // scoreFromSigmoid maps factor sum in roughly [−3,3] to 0–100.
 func scoreFromSigmoid(raw float64) float64 {
-	return clamp(sigmoid(raw*1.15)*100, 0, 100)
+	scale := CalibrationParamsActive().SigmoidScale
+	return clamp(sigmoid(raw*scale)*100, 0, 100)
 }
 
 // decayWeight applies exponential freshness decay (half-life in hours).

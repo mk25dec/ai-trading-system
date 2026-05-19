@@ -1,0 +1,10 @@
+{
+  "sigmoid_scale": 1.15,
+  "composite_swing": 0.45,
+  "composite_short": 0.30,
+  "composite_position": 0.25,
+  "horizon_finbert_blend": 0.65,
+  "logistic_center": 50,
+  "logistic_scale": 10,
+  "p_up_finbert_weight": 0
+}

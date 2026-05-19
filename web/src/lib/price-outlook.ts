@@ -1,4 +1,5 @@
 import type { DecisionView, MarketCandle, MarketFeatures } from "@/lib/pipeline-api"
+import { CALIBRATION } from "@/lib/calibration"
 
 /** Trading-day horizons shown on the projection axis (after last close). */
 export const PROJECTION_HORIZONS = [
@@ -83,7 +84,12 @@ function compositeToProbability(
   if (composite <= 0 && confidence <= 0.2) {
     return 0.5
   }
-  const logistic = 1 / (1 + Math.exp(-(composite - 50) / 10))
+  const logistic =
+    1 /
+    (1 +
+      Math.exp(
+        -(composite - CALIBRATION.logisticCenter) / CALIBRATION.logisticScale,
+      ))
   const horizonPrior =
     shortScore * 0.2 + swingScore * 0.35 + positionScore * 0.45
   const prior = horizonPrior / 100

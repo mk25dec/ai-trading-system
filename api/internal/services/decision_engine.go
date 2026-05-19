@@ -28,7 +28,8 @@ func ComputeDecision(symbol string, mf *models.MarketFeatures, nf *models.NewsFe
 	alignment, alignBonus := horizonAlignment(short, swing, position)
 	conflict, conflictNote := detectConflict(mf, nf, short, swing, position)
 
-	composite := swing.Score*0.45 + short.Score*0.30 + position.Score*0.25 + alignBonus
+	cp := CalibrationParamsActive()
+	composite := swing.Score*cp.CompositeSwing + short.Score*cp.CompositeShort + position.Score*cp.CompositePosition + alignBonus
 	composite = clamp(composite, 0, 100)
 
 	conf := (short.Confidence + swing.Confidence + position.Confidence) / 3
@@ -198,6 +199,18 @@ func categorySentiment(nf *models.NewsFeatures) (float64, float64) {
 	return clamp(score, -1, 1), clamp(conf, 0, 1)
 }
 
+// FinbertCategoryScore exposes FinBERT category score for calibration backtests.
+func FinbertCategoryScore(nf *models.NewsFeatures) (score, confidence float64, ok bool) {
+	if nf == nil {
+		return 0, 0, false
+	}
+	s, c := categoryFinbert(nf)
+	if c <= 0 {
+		return 0, 0, false
+	}
+	return s, c, true
+}
+
 func categoryFinbert(nf *models.NewsFeatures) (float64, float64) {
 	if nf == nil {
 		return 0, 0
@@ -296,7 +309,8 @@ func scoreHorizon(
 	if finbert == 0 {
 		finbert = sent
 	} else {
-		finbert = finbert*0.65 + sent*0.35
+		blend := CalibrationParamsActive().HorizonFinbertBlend
+		finbert = finbert*blend + sent*(1-blend)
 	}
 	risk := weightedCategory(cats, "risk", 1)
 
