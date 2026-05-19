@@ -1,12 +1,16 @@
 import type { CategoryScore, DecisionView, HorizonOutlook, ResearchStockRow } from "@/lib/pipeline-api"
 import { resolveDecision } from "@/lib/decision-engine"
 
-/** v2 baseline categories from my-research.md §5 */
+/** v2 baseline categories from my-research.md — Calculation rules · Category weights */
 export interface ResearchCategoryDef {
   id: string
   label: string
   researchWeight: number
   timeSensitivity: string
+  keyInputs: string
+  modelsPlanned: string
+  /** Where values come from in the running system */
+  dataSource: string
   /** Backend category ids merged into this row */
   backendIds: string[]
   implemented: boolean
@@ -32,7 +36,7 @@ export interface CompositeFormulaBreakdown {
     beforeClamp: number
     composite: number
   }
-  /** Research §3 category sum (implemented factors only) */
+  /** Calculation rules category sum (implemented factors only) */
   categorySum: number
   categoryTerms: CategoryFormulaTerm[]
   confidence: number
@@ -44,6 +48,9 @@ export const RESEARCH_CATEGORIES: ResearchCategoryDef[] = [
     label: "Technical momentum",
     researchWeight: 0.18,
     timeSensitivity: "Very high",
+    keyInputs: "RSI, MACD, EMA, VWAP, ATR",
+    modelsPlanned: "XGBoost, LightGBM, TFT",
+    dataSource: "Alpaca daily bars → market_features (RSI, 24h %, SMA20 distance, volume ratio)",
     backendIds: ["technical"],
     implemented: true,
   },
@@ -52,6 +59,9 @@ export const RESEARCH_CATEGORIES: ResearchCategoryDef[] = [
     label: "Trend strength",
     researchWeight: 0.1,
     timeSensitivity: "High",
+    keyInputs: "HH/HL, ADX",
+    modelsPlanned: "LSTM, Transformers",
+    dataSource: "Alpaca bars → 24h & 5d price change alignment",
     backendIds: ["trend"],
     implemented: true,
   },
@@ -60,6 +70,9 @@ export const RESEARCH_CATEGORIES: ResearchCategoryDef[] = [
     label: "Fundamentals",
     researchWeight: 0.18,
     timeSensitivity: "Low",
+    keyInputs: "Revenue, EPS, FCF, ROIC",
+    modelsPlanned: "LLM finance agent",
+    dataSource: "Not wired in v2 engine",
     backendIds: [],
     implemented: false,
   },
@@ -68,6 +81,9 @@ export const RESEARCH_CATEGORIES: ResearchCategoryDef[] = [
     label: "Valuation",
     researchWeight: 0.1,
     timeSensitivity: "Medium",
+    keyInputs: "P/E, PEG, DCF",
+    modelsPlanned: "Regression + LLM",
+    dataSource: "Not wired in v2 engine",
     backendIds: [],
     implemented: false,
   },
@@ -76,6 +92,9 @@ export const RESEARCH_CATEGORIES: ResearchCategoryDef[] = [
     label: "Sentiment",
     researchWeight: 0.12,
     timeSensitivity: "Very high",
+    keyInputs: "News, social, filings",
+    modelsPlanned: "FinBERT, FinGPT",
+    dataSource: "News pipeline → avg_sentiment 1h/4h/24h + decay weights",
     backendIds: ["sentiment", "finbert"],
     implemented: true,
   },
@@ -84,6 +103,9 @@ export const RESEARCH_CATEGORIES: ResearchCategoryDef[] = [
     label: "Earnings quality",
     researchWeight: 0.08,
     timeSensitivity: "High",
+    keyInputs: "Guidance, margins",
+    modelsPlanned: "FinGPT, Qwen",
+    dataSource: "Not wired in v2 engine",
     backendIds: [],
     implemented: false,
   },
@@ -92,6 +114,9 @@ export const RESEARCH_CATEGORIES: ResearchCategoryDef[] = [
     label: "Market regime",
     researchWeight: 0.08,
     timeSensitivity: "High",
+    keyInputs: "VIX, rates, SPY trend",
+    modelsPlanned: "Regime classifier",
+    dataSource: "Planned — not in v2 engine",
     backendIds: [],
     implemented: false,
   },
@@ -100,6 +125,9 @@ export const RESEARCH_CATEGORIES: ResearchCategoryDef[] = [
     label: "Sector strength",
     researchWeight: 0.05,
     timeSensitivity: "Medium",
+    keyInputs: "Relative strength",
+    modelsPlanned: "XGBoost",
+    dataSource: "Not wired in v2 engine",
     backendIds: [],
     implemented: false,
   },
@@ -108,6 +136,9 @@ export const RESEARCH_CATEGORIES: ResearchCategoryDef[] = [
     label: "Risk analysis",
     researchWeight: 0.06,
     timeSensitivity: "Very high",
+    keyInputs: "Volatility, drawdown",
+    modelsPlanned: "Risk engine",
+    dataSource: "market_features volatility, RSI extremes, negative news spike",
     backendIds: ["risk"],
     implemented: true,
   },
@@ -116,6 +147,9 @@ export const RESEARCH_CATEGORIES: ResearchCategoryDef[] = [
     label: "Liquidity & flow",
     researchWeight: 0.03,
     timeSensitivity: "High",
+    keyInputs: "Volume, options flow",
+    modelsPlanned: "Order-flow models",
+    dataSource: "Partial — volume_ratio in technical category",
     backendIds: [],
     implemented: false,
   },
@@ -124,6 +158,9 @@ export const RESEARCH_CATEGORIES: ResearchCategoryDef[] = [
     label: "Multi-timeframe alignment",
     researchWeight: 0.02,
     timeSensitivity: "Critical",
+    keyInputs: "Cross-horizon agreement",
+    modelsPlanned: "Meta engine",
+    dataSource: "Computed from 3D / 1W / 1M outlook agreement",
     backendIds: [],
     implemented: true,
   },

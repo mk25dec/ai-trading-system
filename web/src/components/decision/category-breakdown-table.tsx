@@ -12,8 +12,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { ScoringMethodologyPanel } from "@/components/decision/scoring-methodology-panel"
 import {
-  COMPOSITE_FORMULA_DOC,
   RESEARCH_CATEGORIES,
   buildStockCategoryBreakdown,
   formatCompositeFormulaTooltip,
@@ -35,7 +35,7 @@ export function CategoryBreakdownTable({
 
   return (
     <div className="space-y-4">
-      <CategoryFormulaNotes />
+      <ScoringMethodologyPanel />
 
       <TooltipProvider>
         <div className="overflow-x-auto">
@@ -43,13 +43,13 @@ export function CategoryBreakdownTable({
             <TableHeader>
               <TableRow className="border-b bg-muted/30 hover:bg-muted/30">
                 <TableHead
-                  rowSpan={3}
+                  rowSpan={2}
                   className="sticky left-0 z-20 min-w-[96px] align-bottom bg-muted/30"
                 >
                   Symbol
                 </TableHead>
                 <TableHead
-                  rowSpan={3}
+                  rowSpan={2}
                   className="sticky left-[96px] z-20 min-w-[76px] align-bottom border-r bg-muted/30 text-center"
                 >
                   <div className="font-semibold">Overall</div>
@@ -66,39 +66,28 @@ export function CategoryBreakdownTable({
                   </TableHead>
                 ))}
                 <TableHead
-                  rowSpan={3}
+                  rowSpan={2}
                   className="min-w-[72px] border-l align-bottom text-center text-xs"
                 >
                   <div className="font-semibold">Σ contrib</div>
                   <div className="mt-1 font-normal text-muted-foreground">impl.</div>
                 </TableHead>
               </TableRow>
-              <TableRow className="bg-muted/20 text-[10px] hover:bg-muted/20">
+              <TableRow className="border-b bg-muted/20 text-[10px] hover:bg-muted/20">
                 {RESEARCH_CATEGORIES.map((cat) => (
                   <TableHead
-                    key={`${cat.id}-weight`}
+                    key={`${cat.id}-meta`}
                     className="border-l border-border/50 py-1.5 text-center font-normal"
                   >
-                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                      Weight
-                    </span>
-                    <div className="mt-0.5 font-mono font-semibold text-foreground">
-                      {(cat.researchWeight * 100).toFixed(0)}%
-                    </div>
-                  </TableHead>
-                ))}
-              </TableRow>
-              <TableRow className="border-b bg-muted/15 text-[10px] hover:bg-muted/15">
-                {RESEARCH_CATEGORIES.map((cat) => (
-                  <TableHead
-                    key={`${cat.id}-time`}
-                    className="border-l border-border/50 py-1.5 text-center font-normal"
-                  >
-                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                      Time sens.
-                    </span>
-                    <div className="mt-0.5 whitespace-normal font-medium leading-tight text-foreground">
-                      {cat.timeSensitivity}
+                    <div
+                      className="whitespace-normal leading-tight text-muted-foreground"
+                      title="Weight · time sensitivity"
+                    >
+                      <span className="font-mono font-semibold text-foreground">
+                        {(cat.researchWeight * 100).toFixed(0)}%
+                      </span>
+                      <span className="mx-1">·</span>
+                      <span>{cat.timeSensitivity}</span>
                     </div>
                   </TableHead>
                 ))}
@@ -126,38 +115,6 @@ export function CategoryBreakdownTable({
   )
 }
 
-function CategoryFormulaNotes() {
-  return (
-    <div className="border-b bg-muted/10 px-4 py-3 text-xs leading-relaxed text-muted-foreground">
-      <p className="mb-2 font-medium text-foreground">Scoring formulas (my-research.md §3, §5)</p>
-      <div className="grid gap-3 lg:grid-cols-2">
-        <div className="rounded-md border border-border/60 bg-card/50 px-3 py-2 font-mono text-[11px]">
-          <p className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-            Per timeframe T
-          </p>
-          <p className="text-foreground">{COMPOSITE_FORMULA_DOC.research}</p>
-        </div>
-        <div className="rounded-md border border-border/60 bg-card/50 px-3 py-2 font-mono text-[11px]">
-          <p className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-            Overall composite (engine)
-          </p>
-          <p className="text-foreground">{COMPOSITE_FORMULA_DOC.engine}</p>
-        </div>
-        <div className="rounded-md border border-border/60 bg-card/50 px-3 py-2 font-mono text-[11px] lg:col-span-2">
-          <p className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-            Cell display
-          </p>
-          <p className="text-foreground">{COMPOSITE_FORMULA_DOC.display}</p>
-        </div>
-      </div>
-      <p className="mt-2 text-[11px]">
-        Hover <span className="font-medium text-foreground">Overall score</span> for the numeric
-        substitution per symbol. Category headers show full name, baseline weight, and time
-        sensitivity from the research brief.
-      </p>
-    </div>
-  )
-}
 
 function CategoryBreakdownRow({ breakdown }: { breakdown: StockCategoryBreakdown }) {
   const compositeSpectrum = scoreSpectrum(breakdown.compositeScore)

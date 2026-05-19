@@ -156,8 +156,8 @@ export function FeaturesPage() {
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Score basis by category</CardTitle>
           <CardDescription>
-            Full category names, weights, and time sensitivity from my-research.md §5. Overall score
-            is column 2 — hover for the substituted formula. See notes above the table for equations.
+            Calculation rules above the grid (formulas, data sources, category weights). Per-symbol
+            scores below — hover Overall for numeric substitution.
           </CardDescription>
         </CardHeader>
         <CardContent className="overflow-x-auto p-0">
