@@ -97,6 +97,16 @@ func TestNewsStance_articlesNoScoreYet(t *testing.T) {
 	}
 }
 
+func TestComputeDecision_insufficientWithoutMarketOrNews(t *testing.T) {
+	d := ComputeDecision("FAKE", nil, nil)
+	if d.CompositeScore != 0 {
+		t.Fatalf("expected composite 0 without data, got %.1f", d.CompositeScore)
+	}
+	if d.PrimaryOutlook != "No data" {
+		t.Fatalf("expected No data outlook, got %s", d.PrimaryOutlook)
+	}
+}
+
 func TestNewsStance_noNews(t *testing.T) {
 	stance, conf := newsStanceFromFeatures(nil)
 	if stance != "no_news" || conf != nil {

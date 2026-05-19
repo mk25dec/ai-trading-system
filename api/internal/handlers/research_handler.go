@@ -56,11 +56,17 @@ func (h ResearchHandler) GetBoard(w http.ResponseWriter, r *http.Request) {
 		AlpacaFeed:       h.AlpacaFeed,
 	}
 
+	validSymbols := make([]string, 0, len(symbols))
 	for _, sym := range symbols {
 		row, err := h.buildRow(r.Context(), sym, storedSignals[sym])
 		if err != nil {
 			continue
 		}
+		if row.DataStatus != "ready" {
+			diag.InvalidSymbols = append(diag.InvalidSymbols, sym)
+			continue
+		}
+		validSymbols = append(validSymbols, sym)
 		rows = append(rows, row)
 		if len(row.Candles) > 0 {
 			diag.SymbolsWithCandles++
@@ -69,6 +75,7 @@ func (h ResearchHandler) GetBoard(w http.ResponseWriter, r *http.Request) {
 			diag.SymbolsWithMarketFeatures++
 		}
 	}
+	symbols = validSymbols
 
 	var refreshedAt *time.Time
 	if len(rows) > 0 && rows[0].UpdatedAt != nil {
@@ -218,8 +225,24 @@ func (h ResearchHandler) buildRow(ctx context.Context, symbol string, stored mod
 		candles[i], candles[j] = candles[j], candles[i]
 	}
 
-	decision := services.ComputeDecision(symbol, mf, nf)
-	rec := services.RecommendationFromDecision(symbol, mf, nf)
+	dataStatus := "ready"
+	if !services.HasTradeableMarketData(len(candles), mf != nil) {
+		dataStatus = "no_market_data"
+	}
+
+	var decision models.DecisionView
+	var rec services.Recommendation
+	if dataStatus == "ready" {
+		decision = services.ComputeDecision(symbol, mf, nf)
+		rec = services.RecommendationFromDecision(symbol, mf, nf)
+	} else {
+		rec = services.Recommendation{
+			Action:     "watch",
+			Score:      0,
+			Confidence: 0,
+			Bullets:    []string{"No market data for this ticker — it was not scored."},
+		}
+	}
 	var lastClose *float64
 	if len(candles) > 0 {
 		c := candles[len(candles)-1].Close
@@ -241,13 +264,20 @@ func (h ResearchHandler) buildRow(ctx context.Context, symbol string, stored mod
 		sigPtr = &s
 	}
 
+	var decisionPtr *models.DecisionView
+	if dataStatus == "ready" {
+		d := decision
+		decisionPtr = &d
+	}
+
 	return models.ResearchStockRow{
 		Symbol:         symbol,
 		Name:           name,
+		DataStatus:     dataStatus,
 		Recommendation: rec.Action,
 		Confidence:     rec.Confidence,
 		Score:          rec.Score,
-		Decision:       &decision,
+		Decision:       decisionPtr,
 		Bullets:        rec.Bullets,
 		LastClose:      lastClose,
 		Market:         mf,
@@ -312,18 +342,5 @@ func (h ResearchHandler) canAccessWorkspace(r *http.Request, workspaceID string,
 }
 
 func normalizeSymbols(raw []string) []string {
-	seen := make(map[string]struct{})
-	var out []string
-	for _, s := range raw {
-		s = strings.ToUpper(strings.TrimSpace(s))
-		if s == "" || len(s) > 12 {
-			continue
-		}
-		if _, ok := seen[s]; ok {
-			continue
-		}
-		seen[s] = struct{}{}
-		out = append(out, s)
-	}
-	return out
+	return services.NormalizeTickers(raw)
 }

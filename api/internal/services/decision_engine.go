@@ -10,6 +10,9 @@ import (
 // ComputeDecision builds a multi-horizon, confidence-weighted trader view from market + news features.
 // Aligned with the v2 research brief: category scores, horizons, risk penalty, alignment meta-signal.
 func ComputeDecision(symbol string, mf *models.MarketFeatures, nf *models.NewsFeatures) models.DecisionView {
+	if !hasScorableInputs(mf, nf) {
+		return insufficientDecisionView()
+	}
 	cats := scoreCategories(mf, nf)
 	short := scoreHorizon("short", "3D", cats, mf, nf, horizonWeights{
 		technical: 0.55, sentiment: 0.45, risk: 0.10,
@@ -615,6 +618,45 @@ func mean(vals []float64) float64 {
 		s += v
 	}
 	return s / float64(len(vals))
+}
+
+func hasScorableInputs(mf *models.MarketFeatures, nf *models.NewsFeatures) bool {
+	if mf != nil {
+		return true
+	}
+	if nf == nil {
+		return false
+	}
+	if nf.NewsCount24h > 0 || nf.NewsCount4h > 0 || nf.NewsCount1h > 0 {
+		return true
+	}
+	if nf.AvgSentiment24h != nil || nf.AvgSentiment4h != nil || nf.AvgSentiment1h != nil {
+		return true
+	}
+	if nf.NegativeNewsSpike || nf.PositiveNewsSpike {
+		return true
+	}
+	fb := nf.Finbert
+	return fb.WeightedSentiment24h != nil || fb.AvgProbPositive24h != nil || fb.PositiveLabelPct24h != nil
+}
+
+func insufficientDecisionView() models.DecisionView {
+	return models.DecisionView{
+		PrimaryAction:  "watch",
+		PrimaryOutlook: "No data",
+		CompositeScore: 0,
+		Confidence:     0.15,
+		RiskLevel:      "medium",
+		Alignment:      "mixed",
+		NewsStance:     "no_news",
+		PriceTrend:     "unknown",
+		Drivers:        []string{"Insufficient market and news data — do not trade on this score"},
+		Horizons: []models.HorizonOutlook{
+			{ID: "short", Label: "3D", Score: 0, Outlook: "watch", Confidence: 0.15},
+			{ID: "swing", Label: "1W", Score: 0, Outlook: "watch", Confidence: 0.15},
+			{ID: "position", Label: "1M", Score: 0, Outlook: "watch", Confidence: 0.15},
+		},
+	}
 }
 
 func clamp(v, lo, hi float64) float64 {

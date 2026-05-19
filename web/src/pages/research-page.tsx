@@ -16,6 +16,9 @@ import { buildTraderKpis } from "@/lib/decision-engine"
 import { sortResearchRows } from "@/lib/feature-metrics"
 import { pipelineApi, type ResearchStockRow } from "@/lib/pipeline-api"
 
+/** Matches backend US ticker validation (1–5 letters, optional class suffix). */
+const TICKER_RE = /^[A-Z]{1,5}(\.[A-Z]{1,2})?$/
+
 export function ResearchPage() {
   const queryClient = useQueryClient()
   const { workspaceId, selectWorkspace, workspaces } = useWorkspace()
@@ -44,7 +47,12 @@ export function ResearchPage() {
       queryClient.invalidateQueries({ queryKey: ["research-board", workspaceId] })
       toast.success("Watchlist updated")
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => {
+      toast.error(e.message)
+      if (board.data?.symbols) {
+        setDraftSymbols(board.data.symbols)
+      }
+    },
   })
 
   const sortedRows = useMemo(
@@ -57,20 +65,30 @@ export function ResearchPage() {
   function addSymbol() {
     const sym = symbolInput.trim().toUpperCase()
     if (!sym) return
+    if (!TICKER_RE.test(sym)) {
+      toast.error("Invalid ticker — use 1–5 letters (e.g. AAPL, IBM)")
+      return
+    }
     if (draftSymbols.includes(sym)) {
       toast.error(`${sym} is already on your list`)
       return
     }
-    const next = [...draftSymbols, sym]
-    setDraftSymbols(next)
+    if (!board.data?.diagnostics?.alpacaConfigured) {
+      toast.error("Market data is not configured — cannot verify new tickers")
+      return
+    }
     setSymbolInput("")
-    saveWatchlist.mutate(next)
+    saveWatchlist.mutate([...draftSymbols, sym])
   }
 
   function removeSymbol(sym: string) {
-    const next = draftSymbols.filter((s) => s !== sym)
-    setDraftSymbols(next)
-    saveWatchlist.mutate(next)
+    saveWatchlist.mutate(draftSymbols.filter((s) => s !== sym))
+  }
+
+  function removeInvalidSymbols() {
+    const invalid = new Set(board.data?.diagnostics?.invalidSymbols ?? [])
+    if (invalid.size === 0) return
+    saveWatchlist.mutate(draftSymbols.filter((s) => !invalid.has(s)))
   }
 
   return (
@@ -108,19 +126,38 @@ export function ResearchPage() {
         </Card>
       )}
 
+      {(board.data?.diagnostics?.invalidSymbols?.length ?? 0) > 0 && (
+        <Card className="border-red-500/40 bg-red-500/5 shadow-sm">
+          <CardContent className="flex flex-col gap-3 py-4 text-sm sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-medium text-red-950 dark:text-red-100">Invalid tickers on watchlist</p>
+              <p className="mt-1 text-muted-foreground">
+                {board.data!.diagnostics!.invalidSymbols!.join(", ")} — no market data. These are hidden
+                from the outlook table and cannot be scored.
+              </p>
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={removeInvalidSymbols}>
+              Remove invalid
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {sortedRows.length > 0 && <TraderKpiCards items={kpis} />}
 
       <Card className="border-border/70 shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Your watchlist</CardTitle>
           <CardDescription>
-            Market ingestion and FinBERT run only for symbols you add here.
+            Tickers are verified against Alpaca market data before being added. Use US symbols like
+            AAPL or IBM (1–5 letters).
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3 sm:flex-row">
           <div className="flex flex-1 gap-2">
             <Input
-              placeholder="e.g. IBM"
+              placeholder="e.g. AAPL"
+              maxLength={8}
               value={symbolInput}
               onChange={(e) => setSymbolInput(e.target.value.toUpperCase())}
               onKeyDown={(e) => e.key === "Enter" && addSymbol()}

@@ -23,7 +23,11 @@ func TestComputeRecommendation_buyOnMomentumAndSentiment(t *testing.T) {
 
 func TestComputeRecommendation_avoidOnNegativeSentiment(t *testing.T) {
 	sent := -0.55
-	nf := &models.NewsFeatures{AvgSentiment24h: &sent, NegativeNewsSpike: true}
+	nf := &models.NewsFeatures{
+		NewsCount24h:      3,
+		AvgSentiment24h:   &sent,
+		NegativeNewsSpike: true,
+	}
 
 	rec := ComputeRecommendation("IBM", nil, nf)
 	if rec.Action != "avoid" {

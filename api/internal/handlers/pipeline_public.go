@@ -9,12 +9,14 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/joeydekruis/ai-trading-system/api/internal/middleware"
 	"github.com/joeydekruis/ai-trading-system/api/internal/models"
+	"github.com/joeydekruis/ai-trading-system/api/internal/services"
 	"github.com/joeydekruis/ai-trading-system/api/internal/store"
 )
 
 type PipelinePublicHandler struct {
 	Store      *store.PipelineStore
 	Workspaces *store.WorkspaceStore
+	Alpaca     *services.AlpacaClient
 }
 
 func (h PipelinePublicHandler) ListWorkflowRuns(w http.ResponseWriter, r *http.Request) {
@@ -167,7 +169,30 @@ func (h PipelinePublicHandler) SetWatchlist(w http.ResponseWriter, r *http.Reque
 		WriteError(w, http.StatusBadRequest, "invalid JSON")
 		return
 	}
-	symbols := normalizeSymbols(req.Symbols)
+	symbols := services.NormalizeTickers(req.Symbols)
+	current, err := h.Store.Watchlist(r.Context(), workspaceID)
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "watchlist failed")
+		return
+	}
+	currentSet := make(map[string]bool, len(current))
+	for _, e := range current {
+		if e.IsActive {
+			currentSet[strings.ToUpper(e.Symbol)] = true
+		}
+	}
+	var added []string
+	for _, s := range symbols {
+		if !currentSet[s] {
+			added = append(added, s)
+		}
+	}
+	if len(added) > 0 {
+		if err := services.ValidateSymbolsWithMarket(r.Context(), h.Alpaca, added); err != nil {
+			WriteError(w, http.StatusUnprocessableEntity, err.Error())
+			return
+		}
+	}
 	if err := h.Store.EnsureSymbols(r.Context(), symbols); err != nil {
 		WriteError(w, http.StatusInternalServerError, "symbol setup failed")
 		return

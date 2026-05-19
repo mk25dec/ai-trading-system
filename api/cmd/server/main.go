@@ -185,7 +185,11 @@ func registerAPIRoutes(r chi.Router, cfg config.Config, pool *pgxpool.Pool) {
 		},
 	}
 
-	pipelinePublic := handlers.PipelinePublicHandler{Store: pipeline, Workspaces: workspaces}
+	pipelinePublic := handlers.PipelinePublicHandler{
+		Store:      pipeline,
+		Workspaces: workspaces,
+		Alpaca:     alpacaClient,
+	}
 	researchHandler := handlers.ResearchHandler{
 		Store:        pipeline,
 		Workspaces:   workspaces,

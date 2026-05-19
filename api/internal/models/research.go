@@ -13,6 +13,7 @@ type ResearchHeadline struct {
 type ResearchStockRow struct {
 	Symbol         string            `json:"symbol"`
 	Name           string            `json:"name"`
+	DataStatus     string            `json:"dataStatus,omitempty"` // "ready" | "no_market_data"
 	Recommendation string            `json:"recommendation"`
 	Confidence     float64           `json:"confidence"`
 	Score          float64           `json:"score"`
@@ -28,11 +29,12 @@ type ResearchStockRow struct {
 }
 
 type ResearchDiagnostics struct {
-	AlpacaConfigured          bool   `json:"alpacaConfigured"`
-	AlpacaFeed                string `json:"alpacaFeed,omitempty"`
-	SymbolsWithCandles        int    `json:"symbolsWithCandles"`
-	SymbolsWithMarketFeatures int    `json:"symbolsWithMarketFeatures"`
-	Hint                      string `json:"hint,omitempty"`
+	AlpacaConfigured          bool     `json:"alpacaConfigured"`
+	AlpacaFeed                string   `json:"alpacaFeed,omitempty"`
+	SymbolsWithCandles        int      `json:"symbolsWithCandles"`
+	SymbolsWithMarketFeatures int      `json:"symbolsWithMarketFeatures"`
+	InvalidSymbols            []string `json:"invalidSymbols,omitempty"`
+	Hint                      string   `json:"hint,omitempty"`
 }
 
 type ResearchBoard struct {

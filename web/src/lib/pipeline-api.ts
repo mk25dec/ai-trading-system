@@ -227,6 +227,7 @@ export interface DecisionView {
 export interface ResearchStockRow {
   symbol: string
   name: string
+  dataStatus?: "ready" | "no_market_data"
   recommendation: RecommendationAction
   confidence: number
   score: number
@@ -245,6 +246,7 @@ export interface ResearchDiagnostics {
   alpacaFeed?: string
   symbolsWithCandles: number
   symbolsWithMarketFeatures: number
+  invalidSymbols?: string[]
   hint?: string
 }
 
