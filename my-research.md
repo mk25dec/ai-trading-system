@@ -47,7 +47,7 @@ FinalScore(T) = Σᵢ (CategoryScoreᵢ(T) × CategoryWeightᵢ × Confidenceᵢ
 | Price projection P(up) | `logistic(composite)×0.5 + horizonPrior×0.35 + conf×0.1 + momentum` | 63d history + 21d path |
 | Multi-horizon path | `P_T = P₀ × (1 + edge×σ×√(days/252) + trend)` per anchor T ∈ {3D,1W,2W,3W,1M} | Grey bands on chart; ECharts popup |
 | Zero-data policy | No market signal **and** no news → composite **0**, display **—**, not 50 | `hasScorableInputs` + `categorySignalStrength` |
-| Outlook buckets | ≥78 Strong buy · ≥62 Buy · ≥45 Watch · ≥32 Sell · under 32 Avoid | Applied to 0–100 horizon/composite scores |
+| Outlook buckets | 78–100 Strong buy · 62–77.99 Buy · 45–61.99 Watch · 32–44.99 Sell · 0–31.99 Avoid | See **§1.5 master table**; same for horizons + composite |
 
 ### 1.5 Trader signal table (outlook vs trade action)
 
@@ -60,15 +60,32 @@ The **Trader outlook** column shows two related outputs from `ComputeDecision` i
 
 They are **not always the same**. Example: composite 42 with outlook **Sell** but badge **Watch** when confidence is below the trade gate.
 
-#### Composite score → outlook label (`scoreToOutlook`)
+#### Master table — composite range, outlook, and signal
 
-| Composite (0–100) | `outlook` key | `primaryOutlook` label |
-|-------------------|---------------|-------------------------|
-| ≥ 78 | `strong_buy` | Strong buy |
-| 62 – 77.9 | `buy` | Buy |
-| **45 – 61.9** | **`watch`** | **Watch** |
-| 32 – 44.9 | `sell` | Sell |
-| &lt; 32 | `avoid` | Avoid |
+Applied to **composite score** and each **horizon score** (3D / 1W / 1M) via `scoreToOutlook` in `decision_engine.go`.  
+**Signal badge** = `primaryAction` after `outlookToAction` + overrides (UI maps `buy_candidate` → **Buy**, etc.).
+
+| Composite range | Outlook key | Outlook label (subline) | Signal badge (conf ≥ **35%**, no conflict) | Signal badge (conf **&lt; 35%**) | `primaryAction` API |
+|-----------------|-------------|-------------------------|---------------------------------------------|-----------------------------------|---------------------|
+| **78 – 100** | `strong_buy` | Strong buy | **Buy** | Watch | `buy_candidate` |
+| **62 – 77.99** | `buy` | Buy | **Buy** | Watch | `buy_candidate` |
+| **45 – 61.99** | `watch` | Watch | **Watch** | Watch | `watch` |
+| **32 – 44.99** | `sell` | Sell | **Sell** | Watch | `sell_candidate` |
+| **0 – 31.99** | `avoid` | Avoid | **Avoid** | Watch* | `avoid` |
+
+\* **Avoid** can still show when overrides force `avoid` even at low confidence (e.g. negative news spike). Otherwise low confidence downgrades Buy/Sell/Avoid outlooks to badge **Watch**.
+
+**Boundary notes (inclusive lower bound):**
+
+| Threshold | Rule in code |
+|-----------|----------------|
+| Strong buy | `score >= 78` |
+| Buy | `62 <= score < 78` |
+| Watch | `45 <= score < 62` |
+| Sell | `32 <= score < 45` |
+| Avoid | `score < 32` |
+
+Same buckets apply per horizon for horizon badges; **trader row outlook label** uses the **composite** after alignment and risk penalty.
 
 Formula (implemented):
 
@@ -77,48 +94,56 @@ composite = 0.45×Score₁W + 0.30×Score₃D + 0.25×Score₁M + alignmentBonus
 composite = clamp(composite, 0, 100)
 ```
 
-| Adjustment | Value |
-|------------|--------|
-| Alignment bonus | +4 aligned bullish · −4 aligned bearish · −2 divergent |
-| Risk penalty | −8 high · −4 medium · 0 low |
+| Adjustment | Range / value |
+|------------|----------------|
+| Alignment bonus | **+4** (3 horizons bullish) · **−4** (≥2 bearish) · **−2** (divergent) · **0** (mixed) |
+| Risk penalty | **−8** (high) · **−4** (medium) · **0** (low) |
 
-#### Outlook → trade action (`outlookToAction`)
+#### Signal gates — when badge ≠ outlook label
 
-Maps outlook to `primaryAction` (`buy_candidate`, `sell_candidate`, `avoid`, `watch`):
+Evaluated in `outlookToAction` **before** overrides. Numeric thresholds:
 
-| Condition | Trade action forced to |
-|-----------|-------------------------|
-| **Confidence &lt; 35%** | **`watch`** (no Buy/Sell even if outlook is Buy/Sell) |
-| Horizons **conflict** and outlook not sell/avoid | `watch` |
-| Outlook buy/strong_buy but **high risk** and composite &lt; 70 | `watch` |
-| Outlook `strong_buy` / `buy` | `buy_candidate` |
-| Outlook `sell` | `sell_candidate` |
-| Outlook `avoid` | `avoid` |
-| Default | `watch` |
+| Gate | Threshold | Effect on signal badge |
+|------|-----------|-------------------------|
+| Low confidence | `confidence < 0.35` (35%) | Force **Watch** (`watch`) — blocks Buy/Sell from outlook |
+| Horizon conflict | `conflict == true` and outlook ∉ {sell, avoid} | Force **Watch** |
+| High risk + moderate score | `risk == high` and outlook ∈ {buy, strong_buy} and `composite < 70` | Force **Watch** |
+| Default (pass gates) | — | Map outlook → signal per master table |
 
-**Confidence** = average of 3D / 1W / 1M horizon confidences, then ×0.75 if no market features, ×0.85 if no news in 24h/1h (floor 15%, cap 95%). Market-only symbols often land **~17–22%**, so the badge stays **Watch** until news coverage improves.
+**Confidence** (0–1, shown as % in UI subline):
 
-#### Override rules (`applyDecisionOverrides`) — can promote/demote after the table above
+| Step | Range / rule |
+|------|----------------|
+| Base | Mean of 3D / 1W / 1M horizon confidences |
+| No market features | × **0.75** |
+| No news (0 articles 1h & 24h) | × **0.85** |
+| Final clamp | **0.15 – 0.95** (15% – 95%) |
 
-| Trigger | Trade action | Outlook | Composite tweak |
-|---------|--------------|---------|-----------------|
-| Negative spike + 24h sentiment &lt; −0.35 | `avoid` | Avoid | cap ≤ 28 |
-| Negative spike + 1h sentiment &lt; −0.45 | `avoid` | Avoid | cap ≤ 30 |
-| Positive spike + 1h sentiment &gt; 0.35 and composite ≥ 50 | `buy_candidate` | Buy | floor ≥ 64 |
-| 24h price &gt; **+2.5%** and 24h sentiment &gt; **+0.3** | `buy_candidate` | Buy | floor ≥ 65 |
-| 24h price &lt; **−2%** and 24h sentiment &lt; **−0.35** | `sell_candidate` | Sell | cap ≤ 38 |
-| 24h sentiment &lt; −0.5, no market | `avoid` | Avoid | cap ≤ 25 |
+Market-only watchlists often end at **~17–22%** → badge **Watch** for composites in 45–61 even when price action is strong.
 
-Overrides run **after** `outlookToAction`. A strong mover with **weak or missing news** (e.g. +28% price, sentiment 0.1) stays **Watch** unless sentiment clears the override thresholds.
+#### Override rules (`applyDecisionOverrides`) — after signal gates
+
+Can **change signal badge and outlook** outside the composite bands above. Runs after `outlookToAction`.
+
+| Trigger (all must match where listed) | Signal badge | Outlook label | Composite range after override |
+|---------------------------------------|--------------|---------------|--------------------------------|
+| Negative news spike + 24h sentiment **&lt; −0.35** | Avoid | Avoid | **≤ 28** |
+| Negative news spike + 1h sentiment **&lt; −0.45** | Avoid | Avoid | **≤ 30** |
+| Positive news spike + 1h sentiment **&gt; +0.35** + composite **≥ 50** | Buy | Buy | **≥ 64** |
+| 24h price **&gt; +2.5%** + 24h sentiment **&gt; +0.3** + no neg spike | Buy | Buy | **≥ 65** |
+| 24h price **&lt; −2%** + 24h sentiment **&lt; −0.35** | Sell | Sell | **≤ 38** |
+| 24h sentiment **&lt; −0.5**, no market data | Avoid | Avoid | **≤ 25** |
+
+Overrides can produce **Buy** with composite in the **45–61** watch band (e.g. floor 65) if sentiment/price triggers fire. A strong mover with **weak news** (e.g. +28% price, sentiment **0.1**) stays in **45–61 / Watch** unless sentiment clears **+0.3** on the momentum override.
 
 #### Debug: why your watchlist can all show Watch (May 2026 example)
 
-| Symbol | Composite | Outlook bucket | Typical conf (market-heavy) | Badge | Why |
-|--------|-----------|----------------|----------------------------|-------|-----|
-| HIVE | ~53 | Watch (45–61) | ~20% | Watch | Mid score band **and** conf &lt; 35% |
-| ING | ~46 | Watch | ~21% | Watch | Same |
-| AAPL | ~46 | Watch | ~17% | Watch | RSI elevated → risk medium; still mid band |
-| RRR | ~45 | Watch | ~21% | Watch | Same |
+| Symbol | Composite | Outlook (range) | Conf | Signal badge | Why |
+|--------|-----------|-----------------|------|--------------|-----|
+| HIVE | ~53 | Watch (**45–61.99**) | ~20% | Watch | Outlook band + conf **&lt; 35%** gate |
+| ING | ~46 | Watch (**45–61.99**) | ~21% | Watch | Same |
+| AAPL | ~46 | Watch (**45–61.99**) | ~17% | Watch | Medium risk penalty; still watch band |
+| RRR | ~45 | Watch (**45–61.99**) | ~21% | Watch | Same |
 
 **Price outlook P(up)** (chart) is a **separate model** (`price-outlook.ts`) — it can show 66% up while the **trade badge** stays Watch because the decision engine requires composite ≥ 62 **and** sufficient confidence for Buy.
 
