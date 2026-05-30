@@ -1,0 +1,20 @@
+# Coolify: new Docker Compose resource → repo path /xgboost-service/docker-compose.yml
+services:
+  xgboost-service:
+    build: .
+    restart: unless-stopped
+    environment:
+      MODEL_PATH: /models/model.json
+    volumes:
+      - xgboost_models:/models
+    expose:
+      - "7888"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:7888/health')\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  xgboost_models:
