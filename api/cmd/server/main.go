@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -73,7 +74,11 @@ func main() {
 			body["postgres"] = "ok"
 		}
 		if duckReady.Load() {
-			body["duckdb"] = "ok"
+			if analyticsDB != nil {
+				body["duckdb"] = "ok"
+			} else {
+				body["duckdb"] = "disabled"
+			}
 		}
 		if pgReady.Load() && duckReady.Load() {
 			body["status"] = "ok"
@@ -117,6 +122,11 @@ func initDuckDB(ctx context.Context, cfg config.Config, ready *atomic.Bool) {
 	for attempt := 1; ; attempt++ {
 		store, err := duckdbstore.Open(cfg.DuckDBPath)
 		if err != nil {
+			if errors.Is(err, duckdbstore.ErrUnavailable) {
+				slog.Warn("duckdb skipped", "err", err)
+				ready.Store(true)
+				return
+			}
 			slog.Error("duckdb open", "attempt", attempt, "path", cfg.DuckDBPath, "err", err)
 			select {
 			case <-ctx.Done():

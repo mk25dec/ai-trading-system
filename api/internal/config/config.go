@@ -56,7 +56,11 @@ func Load() (Config, error) {
 
 	duckPath := os.Getenv("DUCKDB_PATH")
 	if duckPath == "" {
-		duckPath = "/data/analytics.duckdb"
+		if os.PathSeparator == '\\' {
+			duckPath = "data/analytics.duckdb"
+		} else {
+			duckPath = "/data/analytics.duckdb"
+		}
 	}
 
 	return Config{

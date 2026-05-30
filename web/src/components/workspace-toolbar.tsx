@@ -19,6 +19,8 @@ type WorkspaceToolbarProps = {
   isRefreshing?: boolean
   lastRefreshedAt?: string | null
   refreshDisabled?: boolean
+  dateRangeLabel?: string
+  refreshLabel?: string
 }
 
 export function WorkspaceToolbar({
@@ -29,17 +31,19 @@ export function WorkspaceToolbar({
   isRefreshing = false,
   lastRefreshedAt,
   refreshDisabled = false,
+  dateRangeLabel,
+  refreshLabel = "Get latest data",
 }: WorkspaceToolbarProps) {
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {workspaces.length > 1 && (
+      {workspaces.length > 0 && (
         <Select
           value={workspaceId}
           onValueChange={(v) => {
             if (v) onWorkspaceChange(v)
           }}
         >
-          <SelectTrigger className="w-[200px]">
+          <SelectTrigger className="w-[220px]">
             <SelectValue placeholder="Workspace" />
           </SelectTrigger>
           <SelectContent>
@@ -51,15 +55,20 @@ export function WorkspaceToolbar({
           </SelectContent>
         </Select>
       )}
+      {dateRangeLabel && (
+        <span className="hidden rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground sm:inline">
+          {dateRangeLabel}
+        </span>
+      )}
       <Button
         variant="outline"
         disabled={!workspaceId || refreshDisabled || isRefreshing}
         onClick={onRefresh}
       >
         <RefreshCw className={cn("size-4", isRefreshing && "animate-spin")} />
-        Get latest data
+        {refreshLabel}
       </Button>
-      {lastRefreshedAt && (
+      {lastRefreshedAt && !dateRangeLabel && (
         <p className="text-xs text-muted-foreground">
           Last refreshed {formatDateTime(lastRefreshedAt)}
         </p>

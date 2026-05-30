@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-
-	_ "github.com/duckdb/duckdb-go/v2"
 )
 
 //go:embed schema.sql
@@ -27,7 +25,7 @@ func Open(path string) (*Store, error) {
 		return nil, fmt.Errorf("create duckdb directory: %w", err)
 	}
 
-	db, err := sql.Open("duckdb", path)
+	db, err := openDuckDB(path)
 	if err != nil {
 		return nil, fmt.Errorf("open duckdb: %w", err)
 	}

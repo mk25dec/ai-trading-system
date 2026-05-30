@@ -1,16 +1,18 @@
 import { Link, useLocation } from "react-router-dom"
 import {
-  Activity,
   BarChart3,
   Building2,
+  Database,
   LayoutDashboard,
   LineChart,
   LogOut,
   Newspaper,
+  Radio,
   TrendingUp,
   Users,
 } from "lucide-react"
 import { useAuth } from "@/lib/auth"
+import { useWorkspace } from "@/hooks/use-workspace"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
   Sidebar,
@@ -29,10 +31,10 @@ import { Button } from "@/components/ui/button"
 const nav = [
   { title: "Overview", href: "/", icon: LayoutDashboard },
   { title: "Research", href: "/research", icon: LineChart },
-  { title: "Data health", href: "/data-health", icon: Activity },
   { title: "News", href: "/news", icon: Newspaper },
   { title: "Market data", href: "/symbols", icon: TrendingUp },
   { title: "Features", href: "/features", icon: BarChart3 },
+  { title: "Data operations", href: "/data-health", icon: Database },
   { title: "Workspaces", href: "/workspaces", icon: Building2 },
 ]
 
@@ -41,6 +43,15 @@ const adminNav = [{ title: "Users", href: "/users", icon: Users }]
 export function AppSidebar() {
   const { pathname } = useLocation()
   const { user, logout } = useAuth()
+  const { workspaceId } = useWorkspace()
+
+  const platformNav = [
+    ...nav,
+    ...(workspaceId
+      ? [{ title: "Signals", href: `/workspaces/${workspaceId}/signals`, icon: Radio }]
+      : []),
+  ]
+
   const initials = user?.name
     ? user.name
         .split(" ")
@@ -60,11 +71,11 @@ export function AppSidebar() {
           <SidebarGroupLabel>Platform</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {nav.map((item) => (
+              {platformNav.map((item) => (
                 <SidebarMenuItem key={item.href}>
                   <SidebarMenuButton
                     render={<Link to={item.href} />}
-                    isActive={pathname === item.href}
+                    isActive={pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href))}
                   >
                     <item.icon />
                     <span>{item.title}</span>
