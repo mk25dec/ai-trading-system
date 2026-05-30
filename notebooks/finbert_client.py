@@ -98,14 +98,70 @@ def finbert_analyze(
     return data
 
 
+def finbert_analyze_batch(
+    texts: list[str],
+    *,
+    base_url: str | None = None,
+    api_key: str | None = None,
+    timeout: float = 180.0,
+) -> list[dict[str, Any]]:
+    """POST /analyze/batch — faster for notebook backtests (max 32 items per call)."""
+    cleaned = [t.strip() for t in texts if t and t.strip()]
+    if not cleaned:
+        return []
+
+    url = f"{_base_url(base_url)}/analyze/batch"
+    all_results: list[dict[str, Any]] = []
+
+    for offset in range(0, len(cleaned), 32):
+        chunk = cleaned[offset : offset + 32]
+        payload = {
+            "items": [{"id": str(i), "text": text} for i, text in enumerate(chunk)]
+        }
+        resp = requests.post(
+            url,
+            json=payload,
+            headers=_headers(_api_key(api_key)),
+            timeout=timeout,
+        )
+        if resp.status_code == 503:
+            raise FinBERTError(
+                "model still loading (503). Call finbert_health() until status is 'ok', then retry."
+            )
+        if not resp.ok:
+            raise FinBERTError(f"analyze/batch {resp.status_code}: {resp.text}")
+
+        data = resp.json()
+        items = data.get("results") if isinstance(data, dict) else None
+        if not isinstance(items, list):
+            raise FinBERTError(f"unexpected batch response: {data!r}")
+
+        for item in items:
+            if item.get("error"):
+                raise FinBERTError(f"batch item failed: {item['error']}")
+            if "label" not in item or "scores" not in item:
+                raise FinBERTError(f"unexpected batch item: {item!r}")
+            all_results.append({"label": item["label"], "scores": item["scores"]})
+
+    return all_results
+
+
 def finbert_analyze_many(
     texts: list[str],
     *,
     base_url: str | None = None,
     api_key: str | None = None,
     timeout: float = 120.0,
+    use_batch: bool = True,
 ) -> list[dict[str, Any]]:
-    """Analyze multiple strings sequentially (simple helper for notebooks)."""
+    """Analyze multiple strings; prefers /analyze/batch when use_batch=True."""
+    if use_batch and texts:
+        try:
+            return finbert_analyze_batch(
+                texts, base_url=base_url, api_key=api_key, timeout=timeout
+            )
+        except FinBERTError:
+            pass
     return [
         finbert_analyze(t, base_url=base_url, api_key=api_key, timeout=timeout) for t in texts
     ]
