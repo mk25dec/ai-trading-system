@@ -71,10 +71,11 @@ export function ChartPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Price chart</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Alpaca <span className="font-medium text-foreground">30Min</span> bars (RTH, ~every
-            30 minutes) with walk-forward <span className="font-medium text-foreground">predicted_price1</span> on
-            the same timeline. Sync loads ~60 days of intraday plus ~3 years daily for research.
-            Switch to daily for end-of-day closes only.
+            Watchlist symbols only. Alpaca <span className="font-medium text-foreground">30Min</span>{" "}
+            source prices at every bar timestamp (continuous time axis, gaps overnight/weekends) with
+            walk-forward <span className="font-medium text-foreground">predicted_price1</span> on the
+            same points. Sync loads ~60 days intraday plus ~3 years daily. Switch to daily for
+            end-of-day closes.
           </p>
         </div>
         <WorkspaceToolbar

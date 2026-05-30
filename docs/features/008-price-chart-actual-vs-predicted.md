@@ -2,7 +2,7 @@
 
 ## Summary
 
-Workspace watchlist symbols store Alpaca bars in `market_candles` with walk-forward **`predicted_price1`**. The **Price chart** page (`/chart`) defaults to **30Min** intraday closes (~every 30 minutes in RTH) plus the formula prediction on the same timestamps. Daily (`1Day`) is available via the timeframe selector.
+Workspace watchlist symbols store Alpaca bars in `market_candles` with walk-forward **`predicted_price1`**. The **Price chart** page (`/chart`) is watchlist-only: default **30Min** intraday source prices at every Alpaca bar timestamp on a **continuous time** axis (overnight/weekend gaps preserved), plus formula prediction on the same points. Daily (`1Day`) is available via the timeframe selector.
 
 ## Data
 

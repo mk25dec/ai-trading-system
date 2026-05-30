@@ -883,12 +883,12 @@ func (s *PipelineStore) UpdatePredictedPrices(ctx context.Context, symbol, timef
 }
 
 func (s *PipelineStore) ListPriceChartPoints(ctx context.Context, symbol, timeframe string) ([]models.PriceChartPoint, error) {
+	// Return every Alpaca bar for the chart window (no downsampling).
 	rows, err := s.pool.Query(ctx, `
 		SELECT ts, close, predicted_price1
 		FROM market_candles
 		WHERE symbol = $1 AND timeframe = $2 AND source = 'alpaca'
-		ORDER BY ts ASC
-		LIMIT 5000`, symbol, timeframe)
+		ORDER BY ts ASC`, symbol, timeframe)
 	if err != nil {
 		return nil, err
 	}

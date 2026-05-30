@@ -4,9 +4,14 @@ import * as echarts from "echarts"
 import type { PriceChartPoint } from "@/lib/pipeline-api"
 import { cn } from "@/lib/utils"
 
-function formatAxisLabel(timestamp: string, intraday: boolean): string {
-  const d = new Date(timestamp)
-  if (Number.isNaN(d.getTime())) return ""
+function parseTs(timestamp: string): number {
+  const ms = new Date(timestamp).getTime()
+  return Number.isNaN(ms) ? 0 : ms
+}
+
+function formatAxisLabel(ms: number, intraday: boolean): string {
+  if (!ms) return ""
+  const d = new Date(ms)
   if (intraday) {
     return d.toLocaleString(undefined, {
       month: "short",
@@ -24,9 +29,10 @@ function buildOption(
   timeframe: string,
 ): EChartsOption {
   const intraday = timeframe === "30Min"
-  const labels = points.map((p) => formatAxisLabel(p.timestamp, intraday))
-  const actual = points.map((p) => p.close)
-  const predicted = points.map((p) => p.predictedPrice1 ?? null)
+  const actual = points.map((p) => [parseTs(p.timestamp), p.close] as [number, number])
+  const predicted = points.map(
+    (p) => [parseTs(p.timestamp), p.predictedPrice1 ?? null] as [number, number | null],
+  )
 
   return {
     backgroundColor: "transparent",
@@ -51,14 +57,22 @@ function buildOption(
           color: "#f8fafc",
           fontSize: 11,
           padding: [4, 6],
+          formatter: (params) => {
+            const raw = params.value
+            const v = typeof raw === "number" ? raw : Number(raw)
+            if (!Number.isFinite(v)) return String(raw ?? "")
+            if (params.axisDimension === "y") return `$${v.toFixed(2)}`
+            return formatAxisLabel(v, intraday)
+          },
         },
       },
       formatter: (params: unknown) => {
         const items = Array.isArray(params) ? params : [params]
-        const idx = (items[0] as { dataIndex?: number })?.dataIndex ?? 0
+        const first = items[0] as { dataIndex?: number; axisValue?: number }
+        const idx = first?.dataIndex ?? 0
         const pt = points[idx]
         if (!pt) return ""
-        const when = formatAxisLabel(pt.timestamp, intraday)
+        const when = formatAxisLabel(parseTs(pt.timestamp), intraday)
         const lines = [
           `<div style="font-weight:600;margin-bottom:4px">${symbol} · ${when}</div>`,
           `Actual: <b>$${pt.close.toFixed(2)}</b>`,
@@ -75,10 +89,15 @@ function buildOption(
       },
     },
     xAxis: {
-      type: "category",
-      data: labels,
-      axisLabel: { color: "#64748b", fontSize: 10, hideOverlap: true },
+      type: "time",
+      axisLabel: {
+        color: "#64748b",
+        fontSize: 10,
+        hideOverlap: true,
+        formatter: (value: number) => formatAxisLabel(value, intraday),
+      },
       axisLine: { lineStyle: { color: "rgba(148,163,184,0.35)" } },
+      splitLine: { show: false },
     },
     yAxis: {
       type: "value",
