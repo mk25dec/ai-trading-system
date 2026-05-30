@@ -823,6 +823,89 @@ func (s *PipelineStore) CandlesForSymbol(ctx context.Context, symbol, timeframe 
 	return list, rows.Err()
 }
 
+// CandlesForSymbolAsc returns daily bars oldest-first. limit 0 means all rows (capped at 5000).
+func (s *PipelineStore) CandlesForSymbolAsc(ctx context.Context, symbol, timeframe string, limit int) ([]models.MarketCandle, error) {
+	q := `
+		SELECT symbol, timeframe, ts, open, high, low, close, volume, source, created_at
+		FROM market_candles WHERE symbol = $1 AND timeframe = $2 AND source = 'alpaca'
+		ORDER BY ts ASC`
+	args := []any{symbol, timeframe}
+	if limit > 0 {
+		q += ` LIMIT $3`
+		args = append(args, limit)
+	} else {
+		q += ` LIMIT 5000`
+	}
+	rows, err := s.pool.Query(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var list []models.MarketCandle
+	for rows.Next() {
+		var c models.MarketCandle
+		if err := rows.Scan(&c.Symbol, &c.Timeframe, &c.Timestamp, &c.Open, &c.High, &c.Low, &c.Close, &c.Volume, &c.Source, &c.CreatedAt); err != nil {
+			return nil, err
+		}
+		list = append(list, c)
+	}
+	return list, rows.Err()
+}
+
+type PredictedPriceUpdate struct {
+	Timestamp       time.Time
+	PredictedPrice1 float64
+}
+
+func (s *PipelineStore) UpdatePredictedPrices(ctx context.Context, symbol, timeframe, source string, updates []PredictedPriceUpdate) (int, error) {
+	if len(updates) == 0 {
+		return 0, nil
+	}
+	batch := &pgx.Batch{}
+	for _, u := range updates {
+		batch.Queue(`
+			UPDATE market_candles
+			SET predicted_price1 = $4
+			WHERE symbol = $1 AND timeframe = $2 AND ts = $3 AND source = $5`,
+			symbol, timeframe, u.Timestamp, u.PredictedPrice1, source)
+	}
+	br := s.pool.SendBatch(ctx, batch)
+	defer br.Close()
+	n := 0
+	for range updates {
+		tag, err := br.Exec()
+		if err != nil {
+			return n, err
+		}
+		n += int(tag.RowsAffected())
+	}
+	return n, nil
+}
+
+func (s *PipelineStore) ListPriceChartPoints(ctx context.Context, symbol, timeframe string) ([]models.PriceChartPoint, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT ts, close, predicted_price1
+		FROM market_candles
+		WHERE symbol = $1 AND timeframe = $2 AND source = 'alpaca'
+		ORDER BY ts ASC
+		LIMIT 5000`, symbol, timeframe)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var list []models.PriceChartPoint
+	for rows.Next() {
+		var p models.PriceChartPoint
+		var pred *float64
+		if err := rows.Scan(&p.Timestamp, &p.Close, &pred); err != nil {
+			return nil, err
+		}
+		p.PredictedPrice1 = pred
+		list = append(list, p)
+	}
+	return list, rows.Err()
+}
+
 type SentimentDetailRow struct {
 	Symbol       string
 	Label        string

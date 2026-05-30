@@ -82,6 +82,18 @@ go run ./cmd/calibrate/ -since 720h -config ../config/calibration.json
 
 See [calibration backtest runbook](docs/runbooks/calibration-backtest.md).
 
+### Notebooks (FinBERT / XGBoost / API checks)
+
+From `notebooks/` (loads repo root `.env` when present):
+
+| Notebook | Purpose |
+|----------|---------|
+| `test.ipynb` | FinBERT health + analyze |
+| `xgboost_test.ipynb` | XGBoost health + predict (`XGBOOST_API_URL`) |
+| `duckdb_test.ipynb` | Trading API + analytics |
+
+**Price chart** page (`/chart`): actual vs `predicted_price1` from workspace watchlist — use **Sync history** (up to ~3 years Alpaca daily bars).
+
 ## Production (Docker Compose / Coolify)
 
 ```bash

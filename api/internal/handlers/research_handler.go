@@ -157,6 +157,11 @@ func (h ResearchHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 			} else {
 				result.CandlesInserted = n
 			}
+			for _, sym := range symbols {
+				if _, err := services.BackfillSymbolPredictions(r.Context(), h.Store, sym); err != nil {
+					errs = append(errs, "predictions "+sym+": "+err.Error())
+				}
+			}
 		}
 		if err := services.EnrichSymbolsFromAlpacaIfNeeded(r.Context(), h.Store, h.Alpaca, symbols); err != nil {
 			errs = append(errs, "alpaca assets: "+err.Error())

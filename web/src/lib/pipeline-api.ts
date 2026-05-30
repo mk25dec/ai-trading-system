@@ -290,6 +290,24 @@ export interface ResearchBoard {
   diagnostics: ResearchDiagnostics
 }
 
+export interface PriceChartPoint {
+  timestamp: string
+  close: number
+  predictedPrice1?: number
+}
+
+export interface PriceChartSeries {
+  symbol: string
+  points: PriceChartPoint[]
+}
+
+export interface PriceChartSyncResult {
+  candlesFetched: number
+  predictionsUpdated: number
+  symbolsProcessed: number
+  errors?: string[]
+}
+
 export interface ResearchRefreshResult {
   symbolsProcessed: number
   candlesFetched: number
@@ -326,5 +344,13 @@ export const pipelineApi = {
   refreshResearch: (workspaceId: string) =>
     api.post<ResearchRefreshResult>(
       `/api/v1/workspaces/${workspaceId}/research/refresh`,
+    ),
+  priceChart: (workspaceId: string, symbol: string) =>
+    api.get<PriceChartSeries>(
+      `/api/v1/workspaces/${workspaceId}/price-chart?symbol=${encodeURIComponent(symbol)}`,
+    ),
+  syncPriceChart: (workspaceId: string) =>
+    api.post<PriceChartSyncResult>(
+      `/api/v1/workspaces/${workspaceId}/price-chart/sync`,
     ),
 }

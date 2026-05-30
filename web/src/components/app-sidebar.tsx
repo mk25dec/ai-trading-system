@@ -1,6 +1,7 @@
 import { Link, useLocation } from "react-router-dom"
 import {
   BarChart3,
+  ChartSpline,
   Building2,
   Database,
   LayoutDashboard,
@@ -31,6 +32,7 @@ import { Button } from "@/components/ui/button"
 const nav = [
   { title: "Overview", href: "/", icon: LayoutDashboard },
   { title: "Research", href: "/research", icon: LineChart },
+  { title: "Price chart", href: "/chart", icon: ChartSpline },
   { title: "News", href: "/news", icon: Newspaper },
   { title: "Market data", href: "/symbols", icon: TrendingUp },
   { title: "Features", href: "/features", icon: BarChart3 },

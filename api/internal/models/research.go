@@ -50,6 +50,25 @@ type ResearchBoard struct {
 	Diagnostics   ResearchDiagnostics `json:"diagnostics"`
 }
 
+// PriceChartPoint is one daily bar with optional walk-forward formula projection.
+type PriceChartPoint struct {
+	Timestamp       time.Time `json:"timestamp"`
+	Close           float64   `json:"close"`
+	PredictedPrice1 *float64  `json:"predictedPrice1,omitempty"`
+}
+
+type PriceChartSeries struct {
+	Symbol string            `json:"symbol"`
+	Points []PriceChartPoint `json:"points"`
+}
+
+type PriceChartSyncResult struct {
+	CandlesFetched       int      `json:"candlesFetched"`
+	PredictionsUpdated   int      `json:"predictionsUpdated"`
+	SymbolsProcessed     int      `json:"symbolsProcessed"`
+	Errors               []string `json:"errors,omitempty"`
+}
+
 type ResearchRefreshResult struct {
 	SymbolsProcessed int      `json:"symbolsProcessed"`
 	CandlesFetched   int      `json:"candlesFetched"`

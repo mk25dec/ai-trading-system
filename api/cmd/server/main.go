@@ -226,6 +226,11 @@ func registerAPIRoutes(r chi.Router, cfg config.Config, pool *pgxpool.Pool) {
 		},
 		Alpaca: alpacaClient,
 	}
+	priceChartHandler := handlers.PriceChartHandler{
+		Store:      pipeline,
+		Workspaces: workspaces,
+		Alpaca:     alpacaClient,
+	}
 
 	loadUser := func(ctx context.Context, id string) (*models.User, error) {
 		return users.GetByID(ctx, id)
@@ -279,6 +284,8 @@ func registerAPIRoutes(r chi.Router, cfg config.Config, pool *pgxpool.Pool) {
 				r.Get("/{id}/symbols/snapshots/latest", pipelinePublic.LatestWorkspaceSnapshots)
 				r.Get("/{id}/research", researchHandler.GetBoard)
 				r.Post("/{id}/research/refresh", researchHandler.Refresh)
+				r.Get("/{id}/price-chart", priceChartHandler.GetSeries)
+				r.Post("/{id}/price-chart/sync", priceChartHandler.Sync)
 			})
 
 			r.Get("/workflows/runs", pipelinePublic.ListWorkflowRuns)
