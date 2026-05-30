@@ -16,39 +16,47 @@ Monorepo for the trading control plane: **Go API** + **React dashboard**, deploy
 
 ## Quick start (local)
 
-1. Copy environment file and set secrets:
+**Prerequisites:** [Docker](https://docs.docker.com/get-docker/), [Go 1.22+](https://go.dev/dl/), [Node.js 20+](https://nodejs.org/) (for the dashboard).
+
+All local services use a single **`.env` at the repository root** (API, migrations, calibration CLI, Vite, and `docker compose`).
+
+### 1. Create `.env`
 
 ```bash
 cp .env.example .env
 ```
 
-2. Start Postgres:
+Edit `.env`: set `JWT_SECRET`, `ADMIN_PASSWORD`, and any API keys you need. Keep `DATABASE_URL` pointed at `localhost` (see `.env.example`). `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` must match the user/password/database in `DATABASE_URL`.
+
+### 2. Start Postgres
 
 ```bash
 docker compose -f docker-compose.dev.yml up -d
 ```
 
-3. Run API (requires [Go 1.22+](https://go.dev/dl/)):
+Postgres credentials are taken from `.env`.
+
+### 3. Apply database migrations
 
 ```bash
 cd api
-export DATABASE_URL=postgres://trading:trading@localhost:5432/trading?sslmode=disable
-export JWT_SECRET=dev-secret-change-me
-export ADMIN_EMAIL=admin@example.com
-export ADMIN_PASSWORD=changeme
-export CORS_ORIGIN=http://localhost:5173
+go run ./cmd/migrate/
+```
+
+Expect `migrations applied`. Re-run after pulling schema changes.
+
+### 4. Run the API
+
+```bash
+cd api
 go run ./cmd/server
 ```
 
-Calibration backtest (optional, requires snapshots + candles in Postgres):
+Listens on **http://localhost:8090** (`API_PORT` in `.env`).
 
-```bash
-cd api && go run ./cmd/calibrate/ -since 720h -config ../config/calibration.json
-```
+### 5. Run the dashboard
 
-See `docs/runbooks/calibration-backtest.md`.
-
-4. Run dashboard:
+In a **second terminal**:
 
 ```bash
 cd web
@@ -56,7 +64,17 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173 and sign in with `ADMIN_EMAIL` / `ADMIN_PASSWORD`.
+Open **http://localhost:5173**. Vite loads `VITE_*` from the repo root `.env` and proxies `/api` and `/health` to the API. Sign in with `ADMIN_EMAIL` / `ADMIN_PASSWORD` from `.env`.
+
+### Optional: calibration backtest
+
+Requires pipeline data in Postgres. From `api/` (`.env` is loaded automatically):
+
+```bash
+go run ./cmd/calibrate/ -since 720h -config ../config/calibration.json
+```
+
+See [calibration backtest runbook](docs/runbooks/calibration-backtest.md).
 
 ## Production (Docker Compose / Coolify)
 
@@ -104,4 +122,4 @@ Deploy n8n workflows:
 node scripts/n8n/deploy-workflows.mjs
 ```
 
-Requires `N8N_URL`, `N8N_API_KEY`, `API_INTERNAL_BASE_URL`, `INTERNAL_API_KEY` in the environment.
+Requires `N8N_URL`, `N8N_API_KEY`, `API_INTERNAL_BASE_URL`, `INTERNAL_API_KEY` in `.env` (the deploy script loads it automatically).

@@ -7,9 +7,13 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joeydekruis/ai-trading-system/api/internal/db"
+	"github.com/joeydekruis/ai-trading-system/api/internal/envload"
 )
 
 func main() {
+	if err := envload.LoadRepoDotenv(); err != nil {
+		log.Fatalf("load .env: %v", err)
+	}
 	ctx := context.Background()
 	url := os.Getenv("DATABASE_URL")
 	if url == "" {

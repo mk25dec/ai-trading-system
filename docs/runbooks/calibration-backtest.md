@@ -4,10 +4,10 @@ Sprint A: tune decision-engine parameters against realized forward returns using
 
 ## Prerequisites
 
+- Repo root `.env` with `DATABASE_URL` (loaded automatically by `cmd/calibrate`)
 - Postgres with pipeline data populated
 - `symbol_feature_snapshots` rows across the lookback window (run **Refresh data** / snapshot workflow)
 - Daily `market_candles` for symbols in the watchlist
-- `DATABASE_URL` set
 
 ## Config
 
@@ -19,7 +19,6 @@ From repository root:
 
 ```bash
 cd api
-export DATABASE_URL='postgres://...'
 go run ./cmd/calibrate/ -since 720h -config ../config/calibration.json
 ```
 

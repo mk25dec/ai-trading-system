@@ -12,11 +12,15 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joeydekruis/ai-trading-system/api/internal/calibration"
+	"github.com/joeydekruis/ai-trading-system/api/internal/envload"
 	"github.com/joeydekruis/ai-trading-system/api/internal/services"
 	"github.com/joeydekruis/ai-trading-system/api/internal/store"
 )
 
 func main() {
+	if err := envload.LoadRepoDotenv(); err != nil {
+		log.Fatalf("load .env: %v", err)
+	}
 	sinceDur := flag.Duration("since", 720*time.Hour, "lookback window for snapshots")
 	symbolsFlag := flag.String("symbols", "", "comma-separated symbols (empty = all)")
 	configPath := flag.String("config", "config/calibration.json", "calibration JSON path")

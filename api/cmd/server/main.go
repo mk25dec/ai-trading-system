@@ -17,6 +17,7 @@ import (
 	appmw "github.com/joeydekruis/ai-trading-system/api/internal/middleware"
 	"github.com/joeydekruis/ai-trading-system/api/internal/bootstrap"
 	"github.com/joeydekruis/ai-trading-system/api/internal/config"
+	"github.com/joeydekruis/ai-trading-system/api/internal/envload"
 	"github.com/joeydekruis/ai-trading-system/api/internal/db"
 	"github.com/joeydekruis/ai-trading-system/api/internal/duckdbstore"
 	"github.com/joeydekruis/ai-trading-system/api/internal/handlers"
@@ -30,6 +31,11 @@ import (
 var analyticsDB *duckdbstore.Store
 
 func main() {
+	if err := envload.LoadRepoDotenv(); err != nil {
+		slog.Error("load .env", "err", err)
+		os.Exit(1)
+	}
+
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	slog.SetDefault(logger)
 

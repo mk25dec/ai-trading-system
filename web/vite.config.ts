@@ -4,6 +4,8 @@ import react from "@vitejs/plugin-react"
 import tailwindcss from "@tailwindcss/vite"
 
 export default defineConfig({
+  // Single source of truth: repo root `.env` (same as Go API and docker compose).
+  envDir: path.resolve(__dirname, ".."),
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {

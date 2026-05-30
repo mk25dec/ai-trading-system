@@ -1,14 +1,19 @@
 #!/usr/bin/env node
 /**
  * Deploy Trading AI n8n workflows via Public API.
+ * Loads repo root `.env` (see scripts/lib/load-env.mjs).
  *
- * Required env:
+ * Required in .env:
  *   N8N_URL, N8N_API_KEY, API_INTERNAL_BASE_URL, INTERNAL_API_KEY
  *
  * Optional:
  *   RSS_FEED_URL (default Yahoo Finance)
  *   RSS_SOURCE (default yahoo_finance_rss)
  */
+
+import { loadRepoDotenv } from "../lib/load-env.mjs";
+
+loadRepoDotenv();
 
 const N8N_URL = (process.env.N8N_URL || "").replace(/\/$/, "");
 const N8N_API_KEY = process.env.N8N_API_KEY || "";
