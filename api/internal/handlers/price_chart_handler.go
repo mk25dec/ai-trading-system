@@ -39,7 +39,8 @@ func (h PriceChartHandler) GetSeries(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusForbidden, "symbol not on workspace watchlist")
 		return
 	}
-	points, err := h.Store.ListPriceChartPoints(r.Context(), symbol, "1Day")
+	timeframe := normalizeChartTimeframe(r.URL.Query().Get("timeframe"))
+	points, err := h.Store.ListPriceChartPoints(r.Context(), symbol, timeframe)
 	if err != nil {
 		WriteError(w, http.StatusInternalServerError, "chart query failed")
 		return
@@ -47,7 +48,22 @@ func (h PriceChartHandler) GetSeries(w http.ResponseWriter, r *http.Request) {
 	if points == nil {
 		points = []models.PriceChartPoint{}
 	}
-	writeJSON(w, http.StatusOK, models.PriceChartSeries{Symbol: symbol, Points: points})
+	writeJSON(w, http.StatusOK, models.PriceChartSeries{
+		Symbol:    symbol,
+		Timeframe: timeframe,
+		Points:    points,
+	})
+}
+
+func normalizeChartTimeframe(raw string) string {
+	switch strings.ToUpper(strings.TrimSpace(raw)) {
+	case "1DAY", "DAILY", "DAY":
+		return "1Day"
+	case "30MIN", "30M", "INTRADAY":
+		return services.ChartIntradayTimeframe
+	default:
+		return services.ChartIntradayTimeframe
+	}
 }
 
 func (h PriceChartHandler) Sync(w http.ResponseWriter, r *http.Request) {

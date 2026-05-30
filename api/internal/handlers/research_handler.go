@@ -158,7 +158,7 @@ func (h ResearchHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 				result.CandlesInserted = n
 			}
 			for _, sym := range symbols {
-				if _, err := services.BackfillSymbolPredictions(r.Context(), h.Store, sym); err != nil {
+				if _, err := services.BackfillSymbolPredictions(r.Context(), h.Store, sym, "1Day"); err != nil {
 					errs = append(errs, "predictions "+sym+": "+err.Error())
 				}
 			}

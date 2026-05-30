@@ -11,7 +11,10 @@ import (
 // AlpacaWatchlistHistoryDays is max daily history fetched for chart backfill.
 const AlpacaWatchlistHistoryDays = 1095
 
-// SyncWatchlistPriceHistory fetches Alpaca daily bars and backfills predicted_price1.
+// AlpacaIntradayHistoryDays is lookback for 30Min bars on the price chart.
+const AlpacaIntradayHistoryDays = 60
+
+// SyncWatchlistPriceHistory fetches Alpaca daily + 30Min bars and backfills predicted_price1.
 func SyncWatchlistPriceHistory(
 	ctx context.Context,
 	st *store.PipelineStore,
@@ -27,27 +30,43 @@ func SyncWatchlistPriceHistory(
 	if err := st.EnsureSymbols(ctx, symbols); err != nil {
 		return 0, 0, err
 	}
-	candles, err := alpaca.FetchDailyBars(ctx, symbols, AlpacaWatchlistHistoryDays)
+
+	daily, err := alpaca.FetchBars(ctx, symbols, "1Day", AlpacaWatchlistHistoryDays)
 	if err != nil {
 		return 0, 0, err
 	}
-	candlesFetched = len(candles)
-	if _, err := st.UpsertCandles(ctx, candles); err != nil {
+	candlesFetched = len(daily)
+	if _, err := st.UpsertCandles(ctx, daily); err != nil {
 		return candlesFetched, 0, err
 	}
+
+	intraday, err := alpaca.FetchBars(ctx, symbols, ChartIntradayTimeframe, AlpacaIntradayHistoryDays)
+	if err != nil {
+		return candlesFetched, predictionsUpdated, fmt.Errorf("intraday: %w", err)
+	}
+	candlesFetched += len(intraday)
+	if _, err := st.UpsertCandles(ctx, intraday); err != nil {
+		return candlesFetched, predictionsUpdated, err
+	}
+
 	for _, sym := range symbols {
-		n, err := BackfillSymbolPredictions(ctx, st, sym)
+		n, err := BackfillSymbolPredictions(ctx, st, sym, "1Day")
 		if err != nil {
-			return candlesFetched, predictionsUpdated, fmt.Errorf("%s: %w", sym, err)
+			return candlesFetched, predictionsUpdated, fmt.Errorf("%s daily: %w", sym, err)
+		}
+		predictionsUpdated += n
+		n, err = BackfillSymbolPredictions(ctx, st, sym, ChartIntradayTimeframe)
+		if err != nil {
+			return candlesFetched, predictionsUpdated, fmt.Errorf("%s %s: %w", sym, ChartIntradayTimeframe, err)
 		}
 		predictionsUpdated += n
 	}
 	return candlesFetched, predictionsUpdated, nil
 }
 
-// BackfillSymbolPredictions recomputes predicted_price1 for all 1Day alpaca rows of a symbol.
-func BackfillSymbolPredictions(ctx context.Context, st *store.PipelineStore, symbol string) (int, error) {
-	asc, err := st.CandlesForSymbolAsc(ctx, symbol, "1Day", 0)
+// BackfillSymbolPredictions recomputes predicted_price1 for alpaca rows of a symbol/timeframe.
+func BackfillSymbolPredictions(ctx context.Context, st *store.PipelineStore, symbol, timeframe string) (int, error) {
+	asc, err := st.CandlesForSymbolAsc(ctx, symbol, timeframe, 0)
 	if err != nil {
 		return 0, err
 	}
@@ -55,7 +74,7 @@ func BackfillSymbolPredictions(ctx context.Context, st *store.PipelineStore, sym
 		return 0, nil
 	}
 	nf, _ := st.LatestNewsFeatures(ctx, symbol)
-	preds := BackfillPredictedPrices(asc, nf)
+	preds := BackfillPredictedPrices(asc, nf, timeframe)
 	updates := make([]store.PredictedPriceUpdate, 0, len(asc))
 	for i, c := range asc {
 		if math.IsNaN(preds[i]) {
@@ -66,5 +85,5 @@ func BackfillSymbolPredictions(ctx context.Context, st *store.PipelineStore, sym
 			PredictedPrice1: preds[i],
 		})
 	}
-	return st.UpdatePredictedPrices(ctx, symbol, "1Day", "alpaca", updates)
+	return st.UpdatePredictedPrices(ctx, symbol, timeframe, "alpaca", updates)
 }

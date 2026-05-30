@@ -55,15 +55,31 @@ type alpacaBarsResp struct {
 	NextPageToken *string                `json:"next_page_token"`
 }
 
+// ChartIntradayTimeframe is the Alpaca bar size used on the price chart page.
+const ChartIntradayTimeframe = "30Min"
+
 func (a *AlpacaClient) FetchDailyBars(ctx context.Context, symbols []string, days int) ([]models.MarketCandle, error) {
+	return a.FetchBars(ctx, symbols, "1Day", days)
+}
+
+// FetchBars loads historical OHLCV from Alpaca (timeframe e.g. 1Day, 30Min, 1Hour).
+func (a *AlpacaClient) FetchBars(ctx context.Context, symbols []string, timeframe string, days int) ([]models.MarketCandle, error) {
 	if a.Key == "" || a.Secret == "" {
 		return nil, fmt.Errorf("alpaca credentials not configured")
 	}
 	if days <= 0 {
 		days = 30
 	}
+	timeframe = strings.TrimSpace(timeframe)
+	if timeframe == "" {
+		timeframe = "1Day"
+	}
 	if a.Client == nil {
-		a.Client = &http.Client{Timeout: 90 * time.Second}
+		timeout := 90 * time.Second
+		if timeframe != "1Day" {
+			timeout = 180 * time.Second
+		}
+		a.Client = &http.Client{Timeout: timeout}
 	}
 
 	feed := strings.TrimSpace(a.DataFeed)
@@ -77,11 +93,15 @@ func (a *AlpacaClient) FetchDailyBars(ctx context.Context, symbols []string, day
 
 	var all []models.MarketCandle
 	pageToken := ""
+	maxPages := 50
+	if timeframe != "1Day" {
+		maxPages = 120
+	}
 
-	for page := 0; page < 50; page++ {
+	for page := 0; page < maxPages; page++ {
 		q := url.Values{}
 		q.Set("symbols", syms)
-		q.Set("timeframe", "1Day")
+		q.Set("timeframe", timeframe)
 		q.Set("start", start.Format(time.RFC3339))
 		q.Set("end", end.Format(time.RFC3339))
 		q.Set("limit", "10000")
@@ -133,7 +153,7 @@ func (a *AlpacaClient) FetchDailyBars(ctx context.Context, symbols []string, day
 				}
 				all = append(all, models.MarketCandle{
 					Symbol:    sym,
-					Timeframe: "1Day",
+					Timeframe: timeframe,
 					Timestamp: ts,
 					Open:      b.O,
 					High:      b.H,
@@ -152,7 +172,7 @@ func (a *AlpacaClient) FetchDailyBars(ctx context.Context, symbols []string, day
 	}
 
 	if len(all) == 0 {
-		return nil, fmt.Errorf("alpaca returned 0 bars for %d symbol(s) (feed=%s)", len(symbols), feed)
+		return nil, fmt.Errorf("alpaca returned 0 %s bars for %d symbol(s) (feed=%s)", timeframe, len(symbols), feed)
 	}
 
 	return all, nil

@@ -19,7 +19,7 @@ func TestBackfillPredictedPrices_insufficientHistory(t *testing.T) {
 	for i := range asc {
 		asc[i] = models.MarketCandle{Symbol: "TEST", Close: 100 + float64(i)}
 	}
-	out := BackfillPredictedPrices(asc, nil)
+	out := BackfillPredictedPrices(asc, nil, "1Day")
 	for _, v := range out {
 		if !math.IsNaN(v) {
 			t.Fatal("expected all NaN for short series")

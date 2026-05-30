@@ -2,16 +2,16 @@
 
 ## Summary
 
-Workspace watchlist symbols store Alpaca daily closes in `market_candles` with walk-forward **`predicted_price1`** (Sprint D formula, 21-day horizon). The **Price chart** page (`/chart`) plots both series.
+Workspace watchlist symbols store Alpaca bars in `market_candles` with walk-forward **`predicted_price1`**. The **Price chart** page (`/chart`) defaults to **30Min** intraday closes (~every 30 minutes in RTH) plus the formula prediction on the same timestamps. Daily (`1Day`) is available via the timeframe selector.
 
 ## Data
 
 | Column / API | Purpose |
 |--------------|---------|
-| `market_candles.close` | Actual Alpaca daily close |
-| `market_candles.predicted_price1` | Formula projection at that bar (see `api/internal/services/price_projection.go`) |
-| `POST .../price-chart/sync` | Fetch up to ~3y bars + backfill predictions |
-| `GET .../price-chart?symbol=` | Chart series for one watchlist symbol |
+| `market_candles.close` | Actual Alpaca bar close (`30Min` or `1Day`) |
+| `market_candles.predicted_price1` | Walk-forward formula at that timestamp |
+| `POST .../price-chart/sync` | Fetch ~60d `30Min` + ~3y `1Day`, backfill both |
+| `GET .../price-chart?symbol=&timeframe=30Min` | Chart series (default intraday) |
 
 ## UI
 

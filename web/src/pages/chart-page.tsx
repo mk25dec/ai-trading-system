@@ -14,12 +14,13 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useWorkspace } from "@/hooks/use-workspace"
-import { pipelineApi } from "@/lib/pipeline-api"
+import { pipelineApi, type PriceChartTimeframe } from "@/lib/pipeline-api"
 
 export function ChartPage() {
   const queryClient = useQueryClient()
   const { workspaceId, selectWorkspace, workspaces } = useWorkspace()
   const [symbol, setSymbol] = useState("")
+  const [timeframe, setTimeframe] = useState<PriceChartTimeframe>("30Min")
 
   const watchlist = useQuery({
     queryKey: ["watchlist", workspaceId],
@@ -42,8 +43,8 @@ export function ChartPage() {
   }, [symbol, symbols])
 
   const series = useQuery({
-    queryKey: ["price-chart", workspaceId, symbol],
-    queryFn: () => pipelineApi.priceChart(workspaceId, symbol),
+    queryKey: ["price-chart", workspaceId, symbol, timeframe],
+    queryFn: () => pipelineApi.priceChart(workspaceId, symbol, timeframe),
     enabled: !!workspaceId && !!symbol,
   })
 
@@ -62,6 +63,7 @@ export function ChartPage() {
   })
 
   const withPred = series.data?.points.filter((p) => p.predictedPrice1 != null).length ?? 0
+  const tfLabel = timeframe === "30Min" ? "30-minute" : "daily"
 
   return (
     <div className="space-y-6">
@@ -69,10 +71,10 @@ export function ChartPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Price chart</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Actual daily close from Alpaca vs walk-forward{" "}
-            <span className="font-medium text-foreground">predicted_price1</span> (same formula as
-            research projection bands, 21-day horizon). Sync loads up to ~3 years of history for
-            your watchlist.
+            Alpaca <span className="font-medium text-foreground">30Min</span> bars (RTH, ~every
+            30 minutes) with walk-forward <span className="font-medium text-foreground">predicted_price1</span> on
+            the same timeline. Sync loads ~60 days of intraday plus ~3 years daily for research.
+            Switch to daily for end-of-day closes only.
           </p>
         </div>
         <WorkspaceToolbar
@@ -90,11 +92,23 @@ export function ChartPage() {
           <div>
             <CardTitle className="text-base">Actual vs predicted</CardTitle>
             <CardDescription>
-              {series.data?.points.length ?? 0} bars
+              {series.data?.points.length ?? 0} {tfLabel} bars
               {withPred > 0 ? ` · ${withPred} with prediction` : " · run Sync to backfill"}
             </CardDescription>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <Select
+              value={timeframe}
+              onValueChange={(v) => setTimeframe((v as PriceChartTimeframe) ?? "30Min")}
+            >
+              <SelectTrigger className="w-[120px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="30Min">30 minute</SelectItem>
+                <SelectItem value="1Day">Daily</SelectItem>
+              </SelectContent>
+            </Select>
             <Select
               value={symbol}
               onValueChange={(v) => setSymbol(v ?? "")}
@@ -135,6 +149,7 @@ export function ChartPage() {
             <ActualPredictedChart
               points={series.data?.points ?? []}
               symbol={symbol}
+              timeframe={series.data?.timeframe ?? timeframe}
               height={440}
             />
           )}

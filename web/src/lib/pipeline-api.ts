@@ -296,8 +296,11 @@ export interface PriceChartPoint {
   predictedPrice1?: number
 }
 
+export type PriceChartTimeframe = "30Min" | "1Day"
+
 export interface PriceChartSeries {
   symbol: string
+  timeframe: PriceChartTimeframe
   points: PriceChartPoint[]
 }
 
@@ -345,9 +348,9 @@ export const pipelineApi = {
     api.post<ResearchRefreshResult>(
       `/api/v1/workspaces/${workspaceId}/research/refresh`,
     ),
-  priceChart: (workspaceId: string, symbol: string) =>
+  priceChart: (workspaceId: string, symbol: string, timeframe: PriceChartTimeframe = "30Min") =>
     api.get<PriceChartSeries>(
-      `/api/v1/workspaces/${workspaceId}/price-chart?symbol=${encodeURIComponent(symbol)}`,
+      `/api/v1/workspaces/${workspaceId}/price-chart?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframe)}`,
     ),
   syncPriceChart: (workspaceId: string) =>
     api.post<PriceChartSyncResult>(

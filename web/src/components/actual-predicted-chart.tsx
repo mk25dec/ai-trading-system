@@ -4,13 +4,27 @@ import * as echarts from "echarts"
 import type { PriceChartPoint } from "@/lib/pipeline-api"
 import { cn } from "@/lib/utils"
 
-function buildOption(points: PriceChartPoint[], symbol: string): EChartsOption {
-  const labels = points.map((p) => {
-    const d = new Date(p.timestamp)
-    return Number.isNaN(d.getTime())
-      ? ""
-      : d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "2-digit" })
-  })
+function formatAxisLabel(timestamp: string, intraday: boolean): string {
+  const d = new Date(timestamp)
+  if (Number.isNaN(d.getTime())) return ""
+  if (intraday) {
+    return d.toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+  }
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "2-digit" })
+}
+
+function buildOption(
+  points: PriceChartPoint[],
+  symbol: string,
+  timeframe: string,
+): EChartsOption {
+  const intraday = timeframe === "30Min"
+  const labels = points.map((p) => formatAxisLabel(p.timestamp, intraday))
   const actual = points.map((p) => p.close)
   const predicted = points.map((p) => p.predictedPrice1 ?? null)
 
@@ -20,7 +34,7 @@ function buildOption(points: PriceChartPoint[], symbol: string): EChartsOption {
     grid: { left: 56, right: 24, top: 48, bottom: 56 },
     legend: {
       top: 8,
-      data: ["Actual close", "Predicted (formula)"],
+      data: ["Actual (close)", "Predicted (formula)"],
       textStyle: { color: "#64748b", fontSize: 11 },
     },
     tooltip: {
@@ -28,6 +42,37 @@ function buildOption(points: PriceChartPoint[], symbol: string): EChartsOption {
       backgroundColor: "rgba(15, 23, 42, 0.92)",
       borderColor: "rgba(148, 163, 184, 0.35)",
       textStyle: { color: "#f8fafc", fontSize: 12 },
+      axisPointer: {
+        type: "cross",
+        crossStyle: { color: "#94a3b8", width: 1 },
+        lineStyle: { type: "dashed", color: "#94a3b8", width: 1 },
+        label: {
+          backgroundColor: "#334155",
+          color: "#f8fafc",
+          fontSize: 11,
+          padding: [4, 6],
+        },
+      },
+      formatter: (params: unknown) => {
+        const items = Array.isArray(params) ? params : [params]
+        const idx = (items[0] as { dataIndex?: number })?.dataIndex ?? 0
+        const pt = points[idx]
+        if (!pt) return ""
+        const when = formatAxisLabel(pt.timestamp, intraday)
+        const lines = [
+          `<div style="font-weight:600;margin-bottom:4px">${symbol} · ${when}</div>`,
+          `Actual: <b>$${pt.close.toFixed(2)}</b>`,
+        ]
+        if (pt.predictedPrice1 != null) {
+          const diff = pt.predictedPrice1 - pt.close
+          const sign = diff >= 0 ? "+" : ""
+          lines.push(
+            `Predicted: <b>$${pt.predictedPrice1.toFixed(2)}</b>`,
+            `Δ ${sign}$${diff.toFixed(2)}`,
+          )
+        }
+        return lines.join("<br/>")
+      },
     },
     xAxis: {
       type: "category",
@@ -47,7 +92,7 @@ function buildOption(points: PriceChartPoint[], symbol: string): EChartsOption {
     },
     series: [
       {
-        name: "Actual close",
+        name: "Actual (close)",
         type: "line",
         data: actual,
         showSymbol: false,
@@ -78,11 +123,13 @@ function buildOption(points: PriceChartPoint[], symbol: string): EChartsOption {
 export function ActualPredictedChart({
   points,
   symbol,
+  timeframe = "30Min",
   className,
   height = 420,
 }: {
   points: PriceChartPoint[]
   symbol: string
+  timeframe?: string
   className?: string
   height?: number
 }) {
@@ -94,9 +141,9 @@ export function ActualPredictedChart({
     if (!chartRef.current) {
       chartRef.current = echarts.init(containerRef.current, undefined, { renderer: "canvas" })
     }
-    chartRef.current.setOption(buildOption(points, symbol), { notMerge: true })
+    chartRef.current.setOption(buildOption(points, symbol, timeframe), { notMerge: true })
     chartRef.current.resize()
-  }, [points, symbol])
+  }, [points, symbol, timeframe])
 
   useEffect(() => {
     render()
