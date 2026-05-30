@@ -1,0 +1,37 @@
+---
+description: Python testing — pytest, coverage, markers (extends project testing rule)
+globs: "**/*.py,**/*.pyi"
+alwaysApply: false
+---
+
+# Python testing
+
+Matches **`.cursor/rules/testing.mdc`** concepts (coverage, layers, TDD) using **pytest** idioms.
+
+## Framework
+
+Prefer **pytest** unless the repo standardizes differently.
+
+## Coverage
+
+```bash
+pytest --cov=src --cov-report=term-missing
+```
+
+Adjust `src`/package roots to match the tree.
+
+## Markers / organization
+
+```python
+import pytest
+
+@pytest.mark.unit
+def test_calculate_total():
+    ...
+
+@pytest.mark.integration
+def test_database_connection():
+    ...
+```
+
+Keep **`code-reviewer`** / CI expectations in mind: deterministic, isolated tests; explicit fixtures for shared setup.

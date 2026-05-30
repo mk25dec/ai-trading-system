@@ -2,17 +2,23 @@
 
 Monorepo for the trading control plane: **Go API** + **React dashboard**, deployed with **Docker Compose** (Coolify).
 
+**Agents:** Start with [`AGENTS.md`](AGENTS.md) and [`GETTING_STARTED.md`](GETTING_STARTED.md). CI commands live in [`docs/project/setup.md`](docs/project/setup.md).
+
 ## Repository layout
 
 | Path | Purpose |
 |------|---------|
-| `api/` | Go REST API (auth, users, workspaces) |
+| `api/` | Go REST API (auth, users, workspaces, pipeline, decisions) |
 | `web/` | React + Vite + Shadcn UI dashboard |
+| `finbert-api/`, `xgboost-service/` | Python ML / sentiment services |
 | `docker-compose.yml` | Production stack (API + web; external `DATABASE_URL`) |
 | `docker-compose.dev.yml` | Local Postgres only |
+| `.cursor/` | Cursor harness (rules, agents, skills, hooks) |
+| `docs/project/` | Harness product docs (roadmap, setup, issues) |
 | `docs/adr/` | Architecture decisions |
-| `docs/plans/` | Implementation plans |
-| `docs/features/` | Feature documentation |
+| `docs/features/` | Shipped feature documentation |
+| `docs/plans/` | Implementation plans (archive / sprints) |
+| `docs/runbooks/` | Operations |
 
 ## Quick start (local)
 

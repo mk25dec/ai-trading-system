@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": "python .cursor/hooks/shell-guard.py"
+      }
+    ],
+    "sessionEnd": [
+      {
+        "command": "python .cursor/hooks/session-end-log.py"
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": "python .cursor/hooks/subagent-stop.py"
+      }
+    ],
+    "postToolUse": [
+      {
+        "command": "python .cursor/hooks/post-write-remind.py",
+        "matcher": "Write|StrReplace"
+      }
+    ]
+  }
+}

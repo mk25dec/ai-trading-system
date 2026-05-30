@@ -1,0 +1,43 @@
+---
+description: Think before coding, simplicity, surgical edits, verifiable goals
+alwaysApply: true
+---
+
+# Agent behavior
+
+Bias toward caution over speed on non-trivial work.
+
+## Think before coding
+
+- State assumptions explicitly. If uncertain, ask **one** clarifying question.
+- If multiple interpretations exist, present them — do not pick silently.
+- If a simpler approach exists, say so. Push back when warranted.
+- If something is unclear, stop. Name what is confusing. Ask.
+
+## Simplicity first
+
+- Minimum code that solves the problem. Nothing speculative.
+- No features beyond the issue spec.
+- No abstractions for single-use code.
+- No error handling for impossible scenarios.
+- If the diff is much larger than needed, simplify.
+
+## Surgical changes
+
+- Touch only what the issue requires.
+- Do not "improve" adjacent code, comments, or formatting.
+- Match existing style in the file.
+- Remove orphans **your** changes created; do not delete pre-existing dead code unless asked.
+
+## Goal-driven execution
+
+- Transform tasks into verifiable checks from `docs/project/issues/<n>/rubric.md` and `docs/project/setup.md`.
+- "Add validation" → tests for invalid inputs, then implementation.
+- "Fix bug" → repro test, then fix, then green CI.
+- State a brief plan with verify steps for multi-step work.
+
+## Harness alignment
+
+- Propose work **size** (S/M/L/XL); human confirms.
+- Follow `.cursor/rules/orchestration.mdc` — you are often the **parent** orchestrator.
+- Subagents do one role; you consolidate and decide next step.

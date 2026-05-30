@@ -1,0 +1,45 @@
+---
+description: Web patterns — compound components, container/presentation, TanStack/state/URL/forms
+globs: "**/*.tsx,**/*.jsx"
+alwaysApply: false
+---
+
+# Web patterns
+
+Choose libraries that exist in **`package.json`**—do not assume TanStack/Zustand without checking.
+
+## Composition
+
+### Compound components
+
+Parent owns behaviour + state; children consume context—good for tabs, dialogs, menus.
+
+### Render props / slots
+
+Share behaviour Headless-ish layer handles **keyboard + ARIA**; callers supply markup variants.
+
+### Container vs presentational
+
+- **Containers**: data fetching, mutations, orchestration  
+- **Presentational**: props in, UI out (keep side-effect free where possible)
+
+## State
+
+| Concern | Typical tooling (pick what the repo uses) |
+|---------|---------------------------------------------|
+| Server cache | TanStack Query, SWR, tRPC React |
+| Client UI state | Zustand, Jotai, Redux, signals |
+| URL | search params / route segments |
+| Forms | React Hook Form / TanStack Form / similar |
+
+Avoid mirroring authoritative server payloads into duplicated client stores unless there is a clear reason—**derive**.
+
+## URL as shareable truth
+
+Prefer URL for filters, sort, pagination, tabs, searches when users should bookmark/share.
+
+## Data fetching
+
+- **Stale-while-revalidate** via library defaults instead of handcrafted cache.
+- **Optimistic UX**: snapshot → rollback on failure → visible recovery.
+- **Parallelize** independent fetches—avoid parent→child waterfalls when easy to batch.

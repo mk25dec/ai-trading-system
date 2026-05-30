@@ -1,0 +1,74 @@
+---
+description: >-
+  GitHub Issues as assignable work units alongside project.md, roadmap, and per-issue
+  specs — scope, ownership, PR linkage, avoid drift. Apply for planning, branching, PRs.
+alwaysApply: true
+---
+
+# GitHub Issues + product docs (agent-development)
+
+Use **GitHub Issues** as the **assignable backlog**: who picks up what, when it counts as done, and how PRs tie back to intent.
+
+**Product narrative** lives in **`docs/project/project.md`** (vision, lifecycle, delivery) and **`docs/project/roadmap.md`** (phases, ordering). **Per-issue scope** lives in **`docs/project/issues/<n>/spec.md`** and **`rubric.md`** (Phase 1, planner). Issues are the execution graph—not a substitute for those files.
+
+---
+
+## Separation of concerns
+
+| Artefact | Owns |
+|----------|------|
+| **`docs/project/project.md`** | What we build, why, lifecycle, delivery requirements |
+| **`docs/project/roadmap.md`** | Phases, epic intent, ordering (update on every issue close) |
+| **`docs/project/issues/<n>/spec.md`** | Scope and AC for that issue |
+| **`docs/project/issues/<n>/rubric.md`** | Done-criteria and required reviewer subagents |
+| **GitHub Issues** | Assignee, size, links to paths above, discussion |
+| **PR / branch** | Implementation: `Refs` / `Closes #n` |
+| **`docs/project/generator-state.md`** | Harness handoff across sessions—not the team backlog |
+
+If scope changes materially: update **`project.md` / roadmap / issue spec`** as appropriate, then **revise the GitHub issue**—never silently diverge.
+
+---
+
+## Every issue MUST
+
+1. **Point to product docs** — _Spec reference:_ links to **`docs/project/project.md`** (section) and **`docs/project/roadmap.md`** (phase/subtask); after Phase 1, link **`docs/project/issues/<n>/spec.md`** and **`rubric.md`**.
+2. **State acceptance criteria** — Testable checklist (“user can …”, “endpoint returns …”, “CI passes per `setup.md`”).
+3. **Declare size** — S/M/L/XL (agent proposes, human confirms); one primary outcome per issue when possible; epics link child issues.
+4. **Harness** — plan → generate → review completed before close (lighten artefacts for S, never skip loop).
+
+Assignments: **prefer one assignee** per execution issue unless pair programming is explicit.
+
+---
+
+## Naming
+
+- Prefer titles like **`[<area>] Verb object`** (consistent language).
+
+---
+
+## Pull requests / commits
+
+After **git-workflow**:
+
+- Branch: `feature/<issue-n>-slug`, `fix/<issue-n>-slug`.
+- PR: `Closes #n` or `Refs #n`; Conventional Commits footer `Refs #n` where applicable.
+
+Avoid merge with open **CRITICAL/HIGH** in **`docs/project/feedback/<n>/code-review-i*.md`**, **`security-review-i*.md`**, or other required reviewer files for that iteration.
+
+---
+
+## Planner / decomposition
+
+After **`planner`** writes or updates **`docs/project/issues/<n>/spec.md`** and **`rubric.md`**:
+
+1. Create or update the **GitHub issue** with links to those paths and AC checklist.
+2. Map **roadmap subtasks** → one issue each where reasonable; use an **epic issue** for multi-issue phases.
+3. Prefer **GitHub** (CLI, UI, MCP) for backlog updates—not chat-only.
+
+---
+
+## What we do NOT do
+
+- Do not use a monolithic **`docs/project/spec.md`** (removed—use `project.md` + per-issue specs).
+- Do not duplicate full **`project.md`** into one mega-issue.
+- Do not rely on **`generator-state.md`** as the primary backlog.

@@ -1,0 +1,50 @@
+---
+description: Harness artefact ownership, feedback paths, generator discipline
+alwaysApply: true
+---
+
+# Harness discipline
+
+Enforced in agent workflow, not only CI. See `.cursor/rules/harness-artifacts.mdc` for paths.
+
+## Always
+
+- **GitHub issue** for every change (including S).
+- **plan → generate → review** — lighten artefacts for S, never skip the loop.
+- Update **`docs/project/generator-state.md`** when implementation state changes.
+- Update **`docs/project/roadmap.md`** when an issue closes.
+- **`CHANGELOG.md`** entry for every S issue; user-facing M+ recommended.
+
+## Feedback layout
+
+One folder per issue: `docs/project/feedback/<n>/`
+
+Filenames: `<reviewer-type>-i<iteration>.md`, `generator-response-i<iteration>.md`
+
+Reviewers **own** their files; generator **only** writes `generator-response-i*.md`.
+
+Prior iteration files are **immutable** — add new files for the next round.
+
+## Generator must not author
+
+- `code-review-i*.md`, `api-review-i*.md`, `security-review-i*.md`, `frontend-eval-i*.md`, `mcp-review-i*.md`, `database-review-i*.md`, `performance-eval-i*.md`, `docs-review-i*.md`
+
+## Reviewers must not
+
+- Implement fixes in the same pass as review
+- Edit generator-owned `generator-response-i*.md`
+- Mutate a previous iteration's review file
+
+## ADRs
+
+- **accepted** ADRs are binding; **proposed** are not.
+- Generator stops if implementation needs a fork not covered by an accepted ADR → invoke `architect`, wait for human acceptance.
+- Architectural PR changes need linked ADR (`code-reviewer` flags gaps).
+
+## Lifecycle
+
+Check `docs/project/project.md` → **Lifecycle stage** (MVP / Live / Mature) before large refactors. See `.cursor/rules/lifecycle-change.mdc`.
+
+## Exceptions
+
+`skip-harness-check` in PR body + reason — rare, human-approved only.

@@ -1,0 +1,23 @@
+---
+description: TS/JS secrets and env validation (extends project security rule)
+globs: "**/*.ts,**/*.tsx,**/*.js,**/*.jsx"
+alwaysApply: false
+---
+
+# TypeScript / JavaScript security
+
+**Also obey** `.cursor/rules/security.mdc` — invoke **`security-reviewer`** for serious auth/data-path reviews.
+
+## Secrets
+
+```typescript
+// Never hardcode secrets
+const apiKey = process.env.OPENAI_API_KEY;
+if (!apiKey) throw new Error("OPENAI_API_KEY not configured");
+```
+
+Validate deployment secrets at startup (fail fast); never log secrets or tokens.
+
+## Client bundles
+
+Assume anything in client-side bundles can be inspected — gate sensitive operations on the **server** and **validated sessions**.

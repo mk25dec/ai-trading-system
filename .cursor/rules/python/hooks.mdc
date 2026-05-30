@@ -1,0 +1,17 @@
+---
+description: Python editor workflow — format, lint, typecheck after edits; avoid print debugging
+globs: "**/*.py,**/*.pyi"
+alwaysApply: false
+---
+
+# Python hooks (editor workflow)
+
+In **Cursor**, prefer built-in formatting, **`.cursor/hooks.json`** (project automation), and CI over ad-hoc one-off tooling.
+
+After editing `.py`/`.pyi` files:
+
+- Run **formatter** (**Black** / **`ruff format`**) consistent with repo config.
+- Run **lint** (**Ruff** / **flake8**) — fix autofixables when safe.
+- Run **types** (**mypy**, **pyright**, or **`basedpyright`**) when the project defines config.
+
+Prefer **`logging`** over **`print`** in durable application code paths (exceptions: quick CLI tools or mandated scripts).

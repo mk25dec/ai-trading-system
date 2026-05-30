@@ -1,0 +1,67 @@
+---
+description: Coding style — immutability, KISS/DRY/YAGNI, structure, errors, validation, naming
+alwaysApply: true
+---
+
+# Coding style
+
+Prefer **immutability**, **clear boundaries**, and **small cohesive units**. For non-TypeScript files, follow idiomatic naming for that language (e.g. `snake_case` in Python).
+
+## Immutability (critical)
+
+Prefer **new values** over in-place mutation for shared or long-lived data structures.
+
+```text
+WRONG:  modify(original, field, value) → mutates original
+RIGHT:  update(original, field, value) → returns new value with the change
+```
+
+Rationale: fewer hidden side effects, easier debugging, safer concurrency.
+
+## Core principles
+
+### KISS
+
+- Simplest solution that works; avoid premature optimization.
+- Clarity over cleverness.
+
+### DRY
+
+- Factor repeated logic into shared helpers when repetition is **real**.
+- Avoid speculative abstractions.
+
+### YAGNI
+
+- No features or generalization “for later” until need is proven.
+
+## File organization
+
+Prefer **many small, focused files** over few large ones: high cohesion, low coupling; **~200–400 lines typical, ~800 max**; organize by **feature/domain** where it fits the repo.
+
+## Error handling
+
+Handle errors **explicitly**; user-facing paths get **clear messages**; servers log **useful context**. Do not swallow errors with empty `catch` blocks.
+
+## Input validation
+
+Validate at **trust boundaries** (HTTP, CLI, files, external APIs). Prefer **schema-first** tools when the stack has them. Fail fast with actionable errors.
+
+## Naming (TypeScript / JavaScript)
+
+- Variables and functions: **camelCase**, descriptive.
+- Booleans: **`is` / `has` / `should` / `can`** prefixes where it helps.
+- Types, interfaces, components: **PascalCase**.
+- True constants: **UPPER_SNAKE_CASE**.
+- React hooks: **`use` + camelCase**.
+
+## Smells to fix
+
+- **Deep nesting** → early returns, extraction.
+- **Magic numbers** → named constants or config.
+- **Long functions** → split by responsibility.
+
+## Checklist before done
+
+- Readable and well-named; functions small (target under ~50 lines); files focused (under ~800 lines).
+- No unnecessary deep nesting; proper error handling; config over hardcoded secrets/URLs.
+- Prefer immutable updates for shared state; align with **code-review** rule for review passes.

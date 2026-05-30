@@ -1,0 +1,53 @@
+---
+description: Web UI structure — feature folders, design tokens, animation-friendly CSS, semantic HTML, naming
+globs: "**/*.tsx,**/*.jsx,**/*.css"
+alwaysApply: false
+---
+
+# Web coding style
+
+Matches the spirit of `.cursor/rules/coding-style.mdc` for **presentation code**.
+
+## File organization
+
+Prefer **feature / surface** folders, not “all buttons in one flat folder unless tiny”:
+
+```text
+src/
+├── components/
+│   └── hero/
+│       ├── Hero.tsx
+│       ├── HeroVisual.tsx
+│       └── hero.css
+├── hooks/
+├── lib/
+└── styles/
+```
+
+## Design tokens (`:root`)
+
+Centralize palette, type scale, spacing, motion — avoid repeating magic values across components:
+
+```css
+:root {
+  --color-surface: oklch(98% 0 0);
+  --text-base: clamp(1rem, 0.92rem + 0.4vw, 1.125rem);
+  --duration-normal: 300ms;
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+```
+
+## Motion
+
+Prefer **`transform`**, **`opacity`**, **`clip-path`** (and **`filter`** sparingly). Avoid animating layout (`width`, `height`, top/left, margin, padding, border-width, `font-size`) when it triggers reflow unless there is no alternative.
+
+## Semantic HTML
+
+Use **`header` / `nav` / `main` / `section` / `footer`**, headings with stable **`id`** for **`aria-labelledby`**, landmarks + labels — not infinite anonymous **`div`** shells.
+
+## Naming
+
+- Components: **PascalCase**
+- Hooks: **`use*`**
+- CSS: **kebab-case** or utilities per project convention
+- Animation helpers: camelCase + intent (**`heroRevealTl`**)

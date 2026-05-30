@@ -1,0 +1,16 @@
+---
+description: Post-edit reminders for Go API
+globs: "api/**/*.go"
+alwaysApply: false
+---
+
+# Go hooks reminder
+
+After substantive `api/` edits:
+
+```bash
+cd api && go test ./...
+cd api && go vet ./...
+```
+
+If migrations changed: run `go run ./cmd/migrate/` against dev Postgres.

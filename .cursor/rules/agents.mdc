@@ -1,0 +1,26 @@
+---
+description: Subagent roster and delegation triggers — invoke via Task tool
+alwaysApply: true
+---
+
+# Agent orchestration index
+
+Subagents live in **`.cursor/agents/`**. **Parent** runs the loop per `.cursor/rules/orchestration.mdc`.
+
+| Subagent | When |
+|----------|------|
+| **planner** | Before generator — issue spec + rubric |
+| **architect** | Stack, ADR drafts, unresolved forks |
+| **generator** | Implement issue spec; TDD; `generator-state.md` |
+| **code-reviewer** | Substantive code; flags missing ADR |
+| **api-reviewer** | HTTP/API route handlers |
+| **mcp-reviewer** | MCP tools, schemas, auth |
+| **database-reviewer** | Migrations, SQL, RLS |
+| **security-reviewer** | Auth, secrets, OWASP surfaces |
+| **frontend-evaluator** | Live UI vs rubrics (Playwright MCP) |
+| **performance-evaluator** | Perf budgets, Lighthouse |
+| **doc-updater** | **After** all other required reviewers PASS |
+
+All reviewers write to `docs/project/feedback/<issue>/<type>-i<iter>.md`.
+
+Skills for depth: `.cursor/skills/README.md`

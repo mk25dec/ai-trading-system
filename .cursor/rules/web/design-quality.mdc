@@ -1,0 +1,31 @@
+---
+description: Web design quality — anti-template defaults, intentional hierarchy, motion, frontend-evaluator-aligned polish
+globs: "**/*.tsx,**/*.jsx,**/*.css"
+alwaysApply: false
+---
+
+# Web design quality
+
+Fits **Harness** expectations: **`planner`** Design direction + **`frontend-evaluator`** “anti-ai-slop” scoring.
+
+## Anti-template
+
+Avoid shipping **generic SaaS-placeholder** layouts: unmotivated centered hero + gradient blob, identical card grids, default library skin with no tailoring, gray-on-gray timidity everywhere.
+
+### Push for (pick a direction deliberately)
+
+Strong **hierarchy**, **spacing rhythm**, **layering/motion**, **paired typography**, **semantic color**, designed **interaction states**, intentional **layouts** (bento / editorial / scrolly where spec calls for it).
+
+## Before implementing UI
+
+1. Concrete visual direction (**not** only “minimal / modern”).
+2. Named palette + type roles.
+3. A few **real references** (products, comps art-direction).
+4. Align with **`docs/project/project.md`** and the issue spec when the harness is active.
+
+## Component checklist
+
+- [ ] Avoids looking like untouched Tailwind / shadcn demo
+- [ ] Hover / focus / active / disabled feel intentional
+- [ ] Hierarchy: not everything same weight/size
+- [ ] Readable in plausible product screenshot — matches **frontend-evaluator** bar

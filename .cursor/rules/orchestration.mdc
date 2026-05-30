@@ -1,0 +1,55 @@
+---
+description: Parent agent owns plan → generate → review closure; never skip harness
+alwaysApply: true
+---
+
+# Orchestration (mandatory)
+
+Enforced with `AGENTS.md`. Subagents must not replace this loop.
+
+## You are the parent
+
+Subagents complete **once** per invocation. They do **not** run the full loop or wait for each other.
+
+## Canonical loop (every issue, including S)
+
+1. **Size** — propose S/M/L/XL; human confirms.
+2. **`planner`** — issue spec + rubric in `docs/project/issues/<n>/` (light for S/epic).
+3. **`generator`** — TDD, update `generator-state.md`, output reviewer handoff.
+4. **Reviewers in parallel** — all subagents in issue rubric **except doc-updater**.
+5. **Consolidate** — CRITICAL/HIGH, frontend-evaluator FAIL → single backlog.
+6. If blockers and generator round **≤ 3** → **`generator`** with backlog + `docs/project/feedback/<n>/` paths.
+7. If all required reviewers **PASS** → **`doc-updater`** last.
+8. **Testing gate** — run commands from `docs/project/setup.md`; human sign-off when UI.
+9. **PR** — GitHub Flow; never push to `main` directly.
+
+## Hard limits
+
+- **Max 3** `Task(generator)` calls per issue → then **human** triage.
+- **Never** claim merge-ready without reviewer PASS artefacts.
+- **Never** skip plan → generate → review because the task is small.
+- **All reviewers are subagents** under `.cursor/agents/` — not inline chat or skills.
+
+## Reviewer handoff (from generator)
+
+```markdown
+## Reviewer handoff
+- Issue: #n
+- Iteration: i
+- Subagents: [from rubric]
+- Commands run: ...
+```
+
+## Parallel vs serial
+
+| Parallel | Serial |
+|----------|--------|
+| code-reviewer, security-reviewer, api-reviewer, mcp-reviewer, database-reviewer, frontend-evaluator, performance-evaluator | planner → generator; all reviewers PASS → doc-updater; architect before generator when ADR needed |
+
+## After merge
+
+Update `roadmap.md`, `generator-state.md`, `CHANGELOG.md` (S required), close/update GitHub issue.
+
+## Agent index
+
+See `.cursor/rules/agents.mdc` or `AGENTS.md` § Agent roster.

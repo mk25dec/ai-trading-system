@@ -1,0 +1,32 @@
+---
+description: Go API patterns — chi router, pgx, layered handlers/services
+globs: "api/**/*.go"
+alwaysApply: false
+---
+
+# Go API patterns
+
+## Layout
+
+- `api/cmd/` — binaries (`server`, `migrate`, `calibrate`)
+- `api/internal/handlers/` — HTTP transport only
+- `api/internal/services/` — business logic
+- `api/internal/store/` — persistence
+- `api/internal/models/` — domain types
+
+## Handlers
+
+- Parse and validate input at the boundary; return typed errors via `httputil` / `handlers/response.go`
+- No SQL or Alpaca calls directly in handlers — delegate to services
+- Auth: use `middleware.Auth`; workspace scope on every tenant route
+
+## Services
+
+- Explicit errors with context; no swallowed `err`
+- Table-driven tests for math and aggregation (`*_test.go` next to source)
+- Config from `internal/config` / env — not hard-coded secrets
+
+## Database
+
+- Migrations in `api/internal/db/migrations/` — reversible `up`/`down`
+- Parameterized queries via `pgx`; never interpolate user input into SQL

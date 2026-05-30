@@ -1,0 +1,51 @@
+---
+description: TS/JS patterns — API wrappers, hooks, repository-style data access surfaces
+globs: "**/*.ts,**/*.tsx,**/*.js,**/*.jsx"
+alwaysApply: false
+---
+
+# TypeScript / JavaScript patterns
+
+Fit patterns to the repo — don’t force layers the project doesn’t use.
+
+## API envelope (example)
+
+Standardize responses only if this codebase already agrees on a shape:
+
+```typescript
+interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  meta?: { total: number; page: number; limit: number };
+}
+```
+
+## Custom hook (React)
+
+Isolate reusable state/effects — keep dependency arrays correct:
+
+```typescript
+export function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(id);
+  }, [value, delay]);
+  return debouncedValue;
+}
+```
+
+## Repository-shaped module (backend / data layer)
+
+Thin HTTP handlers often pair with a predictable persistence surface:
+
+```typescript
+interface Repository<T, CreateDto, UpdateDto> {
+  findAll(filters?: unknown): Promise<T[]>;
+  findById(id: string): Promise<T | null>;
+  create(data: CreateDto): Promise<T>;
+  update(id: string, data: UpdateDto): Promise<T>;
+  delete(id: string): Promise<void>;
+}
+```

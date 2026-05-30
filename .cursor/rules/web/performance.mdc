@@ -1,0 +1,44 @@
+---
+description: Web performance — Core Web Vitals, bundle budgets, images, fonts, motion
+globs: "**/*.tsx,**/*.jsx,**/*.css"
+alwaysApply: false
+---
+
+# Web performance
+
+Targets are **guides**—tune to product class.
+
+## Core Web Vitals (targets)
+
+| Metric | Target |
+|--------|--------|
+| LCP | under 2.5s |
+| INP | under 200ms |
+| CLS | under 0.1 |
+
+## Bundle sanity (gzip ballparks — adjust)
+
+| Surface | Rough JS ceiling | Rough CSS ceiling |
+|---------|------------------|-------------------|
+| Marketing | ~150 KB | ~30 KB |
+| App shell | ~300 KB | ~50 KB |
+
+## Loading
+
+Critical CSS only when justified; preload **hero media + critical font subset** sparingly; `import()` heavy deps.
+
+```ts
+const mod = await import("heavy-chart-lib");
+```
+
+## Images
+
+Explicit **`width`** / **`height`**; `fetchpriority="high"` only for true LCP; lazy below fold; serve modern formats appropriately.
+
+## Fonts
+
+Cap families / weights; **`font-display: swap`**; subset when possible.
+
+## Motion
+
+Compositor-friendly transforms/opacity (see **`web/coding-style`**); remove **`will-change`** after transitions; **`IntersectionObserver`** over scroll spam.

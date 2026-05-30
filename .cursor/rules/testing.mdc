@@ -1,0 +1,103 @@
+---
+description: Testing — coverage targets, layers, TDD loop, AAA/naming (aligned with generator + code-review)
+alwaysApply: true
+---
+
+# Testing requirements
+
+Use the repo’s actual scripts (**`pnpm` / `npm` / `vitest` / `jest` / pytest**, etc.)—never assume a single toolchain.
+
+See also **`.cursor/agents/generator.md`** (**Implementation discipline (TDD)**) and **`.cursor/rules/code-review.mdc`**.
+
+---
+
+## Coverage expectation
+
+Treat **approximately 80%** coverage (branches/functions/lines/statements—whatever the project reports) as the bar for **new or changed logical surfaces** once coverage tooling exists. Full-repo percentages may lag legacy code; don’t skip tests on touched behavior.
+
+---
+
+## Test layers (use what the stack affords)
+
+For meaningful features, aim for depth on all dimensions **when justified**:
+
+| Layer | Scope | Typical focus |
+|-------|--------|----------------|
+| **Unit** | Pure logic, helpers, hooks, isolated components | Fast, deterministic |
+| **Integration** | HTTP handlers, DB, queue boundaries | Real wiring with test DB or containers when practical |
+| **E2E** | Critical user journeys | Playwright/Cypress/etc. aligned with **`frontend-evaluator`** must-pass flows |
+
+Trivial edits (copy, layout-only) may skip new tests—say so in the PR/commit when it’s intentional.
+
+---
+
+## CI (GitHub Actions)
+
+When changing `src/`, public HTTP/API contracts, database migrations, or introducing **new mandatory test layers** (integration, E2E), explicitly decide whether **`.github/workflows/`** must be **updated** so PRs run the same commands contributors use locally (`npm test`, `npm run typecheck`, `npm run lint`, `npm run build`, and where applicable `npm run db:test:migrate` or a documented subset).
+
+If the repo has **no** general CI workflow yet, add or reference a **[tooling] CI** issue; feature issues can depend on it. Do not require a workflow edit for every trivial doc-only change—use judgment (see **`.github/pull_request_template.md`** and issue templates).
+
+---
+
+## Postgres migration verification
+
+When changing PostgreSQL schema, Drizzle migrations, constraints, indexes, RLS, or seed data:
+
+- Run the normal app checks: `npm test`, `npm run typecheck`, `npm run lint`, and `npm run build` when those scripts exist.
+- Run `npm run db:test:migrate` to apply migrations against a clean Docker Postgres instance.
+- For permission/scope constraints, include at least one negative database check when practical, such as proving an invalid scoped membership fails.
+- If Docker is unavailable or the migration cannot be applied locally, state that explicitly in the handoff/PR and involve `database-reviewer`.
+- Do not treat generated SQL review alone as sufficient for migration safety when a Docker-backed check is feasible.
+
+---
+
+## Test-driven workflow (aligned with **`generator`**)
+
+Mandatory shape for behavioral work:
+
+1. **RED** — Add a failing test that encodes desired behavior  
+2. **Run** — Confirm failure for the **right reason**  
+3. **GREEN** — Minimal code to pass  
+4. **Run** — All relevant tests green  
+5. **Refactor** — Clean up without changing semantics  
+6. **Coverage** — Check coverage when the toolchain supports it; close gaps on new paths  
+
+Pure UI/asset changes may omit RED only when nothing testable shifted.
+
+---
+
+## When tests fail
+
+1. Isolate: shared state, time, RNG, env—fix flaky setup before blaming production code  
+2. Mocks/stubs—confirm they mirror real contracts  
+3. Prefer fixing **implementation**; change tests only when the spec or behavior contract was wrong  
+4. For stuck loops, use focused debugging alongside this rule—not a substitute for reading failure output  
+
+(Optionally delegate test-design questions in chat; **`generator`** already encodes harness TDD.)
+
+---
+
+## Structure and naming
+
+Prefer **Arrange–Act–Assert** and titles that describe **behavior + condition**:
+
+```typescript
+test("returns empty results when query matches nothing", () => {
+  // Arrange
+  const query = "__no_matches__";
+
+  // Act
+  const out = searchMarkets(query);
+
+  // Assert
+  expect(out).toEqual([]);
+});
+```
+
+Avoid names like `works` or `test1`.
+
+---
+
+## Review integration
+
+The **`code-reviewer`** subagent is expected to run the project **test suite** when reviewing substantive changes—keep tests runnable and deterministic on CI paths when CI exists.

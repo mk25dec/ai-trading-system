@@ -1,0 +1,12 @@
+---
+description: Go coding style — explicit errors, small functions
+globs: "api/**/*.go"
+alwaysApply: false
+---
+
+# Go coding style
+
+- `gofmt` / standard library conventions
+- Return errors; wrap with `%w` when adding context
+- Prefer named types over `map[string]any` at API boundaries
+- Comments only for non-obvious trading/risk rules — not for obvious code

@@ -1,0 +1,30 @@
+---
+description: Logging, errors, health checks, deployment smoke
+globs: src/**,app/**,lib/**,server/**,api/**
+alwaysApply: false
+---
+
+# Observability
+
+Required in `docs/project/project.md` → Delivery requirements for L/XL and **Live** stage.
+
+## Minimum bar
+
+| Area | Requirement |
+|------|-------------|
+| **Logging** | Structured logs in server/API paths; no secrets in logs |
+| **Errors** | User-facing messages safe; server logs useful context; no stack traces to clients |
+| **Health** | Health/readiness endpoint for deployable services |
+| **Errors (Live)** | Error tracking (e.g. Sentry) documented in `docs/project/setup.md` |
+| **Deploy (XL)** | Post-deploy Playwright smoke against staging URL |
+
+## Review triggers
+
+- **security-reviewer** — log injection, PII in logs
+- **performance-evaluator** — latency regressions when in issue rubric
+- Record XL staging smoke in issue or release note
+
+## Not required for
+
+- Pure docs/harness changes
+- S copy fixes with no runtime surface

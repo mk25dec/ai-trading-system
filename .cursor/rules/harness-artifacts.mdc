@@ -1,0 +1,68 @@
+---
+description: Harness file paths, rubrics, ADRs, CI profile, feedback naming
+globs: docs/project/**,docs/adr/**,CHANGELOG.md
+alwaysApply: false
+---
+
+# Harness artefacts
+
+Chat is ephemeral; these files are memory. One owner per artefact.
+
+## Core paths
+
+| Path | Owner | Purpose |
+|------|-------|---------|
+| `docs/project/project.md` | planner / human | Product truth, lifecycle stage, delivery requirements |
+| `docs/project/roadmap.md` | planner | Phases → epics; **update every issue close** |
+| `docs/project/eval-rubric.md` | planner | Global quality bar |
+| `docs/project/setup.md` | human / generator | **CI commands**, MCPs, env vars |
+| `docs/project/generator-state.md` | generator | Session handoff |
+| `docs/project/issues/<n>/spec.md` | planner | Issue scope |
+| `docs/project/issues/<n>/rubric.md` | planner | Issue done-criteria; lists required reviewers |
+| `docs/project/feedback/<n>/` | reviewers + generator | See below |
+| `docs/adr/NNNN-*.md` | architect → human accepts | Why decisions were made |
+| `CHANGELOG.md` | generator | **Required for every S issue** |
+
+Templates: `docs/project/templates/`
+
+## Work sizing
+
+Agent proposes S/M/L/XL; human confirms. **Always** GitHub issue + plan → generate → review.
+
+| Size | Depth |
+|------|-------|
+| S | Light spec/rubric + CHANGELOG |
+| M | Full spec + rubric |
+| L | Multiple issues |
+| XL | Phase 0 + staging (XL only) |
+
+## Hybrid rubric
+
+Reviewers read **both** `eval-rubric.md` and `issues/<n>/rubric.md`. Fail if either violated.
+
+## Feedback naming
+
+One folder per issue: `docs/project/feedback/<n>/`
+
+- Reviewers: `<type>-i<iteration>.md` (e.g. `code-review-i1.md`)
+- Generator only: `generator-response-i<iteration>.md`
+- Never edit prior iteration files; add new files.
+
+## ADRs
+
+- **proposed** — not binding for implementation
+- **accepted** — generator and reviewers must comply
+- Link from issue spec `## Related ADRs` and PR body
+- Skill: `.cursor/skills/architecture-decision-records/SKILL.md`
+
+## CI profile
+
+Canonical commands in `docs/project/setup.md`. Phase 3 testing gate and GitHub Actions must match.
+
+## ADR vs project.md
+
+| | project.md | ADR |
+|--|------------|-----|
+| What | Current stack summary | Why chosen, alternatives rejected |
+
+If reversing the decision causes meaningful rework → ADR required.

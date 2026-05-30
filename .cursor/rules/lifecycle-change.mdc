@@ -1,0 +1,37 @@
+---
+description: MVP vs Live refactor bar, roadmap sync, spec drift handling
+globs: docs/project/**,docs/adr/**
+alwaysApply: false
+---
+
+# Lifecycle and change management
+
+Read `docs/project/project.md` → **Lifecycle stage** before large refactors or schema changes.
+
+## Lifecycle stages
+
+| Stage | Refactor bar |
+|-------|----------------|
+| **MVP** | Rigorous refactors OK; breaking changes need migration notes in PR |
+| **Live** | ADR or explicit plan; migrations; prefer additive changes; extended smoke |
+| **Mature** | Stricter; feature flags for risky rollout; staging smoke for XL |
+
+## When specs drift
+
+| Situation | Action |
+|-----------|--------|
+| Issue spec wrong mid-work | Update `docs/project/issues/<n>/spec.md` + issue comment; ADR if architectural |
+| Product pivot | Update `project.md` + `roadmap.md`; supersede ADRs |
+| Issue closes | **Update `roadmap.md`** (required) |
+
+Record deltas in issue spec **Change log** section.
+
+## Refactor triggers
+
+- **MVP:** proceed with tests green; note in PR.
+- **Live:** stop if no ADR/migration plan for breaking change; escalate to human.
+- **Mature:** same as Live + consider feature flag (see `project.md` Delivery requirements).
+
+## Epic closure
+
+Dedicated subtask: all children closed, phase rubric PASS, roadmap updated, optional retrospective in `docs/project/retrospectives/`.

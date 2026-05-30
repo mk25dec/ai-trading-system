@@ -1,0 +1,19 @@
+---
+description: TS/JS testing — Playwright E2E aligns with frontend-evaluator + Vitest/Jest conventions
+globs: "**/*.ts,**/*.tsx,**/*.js,**/*.jsx"
+alwaysApply: false
+---
+
+# TypeScript / JavaScript testing
+
+Aligns with `.cursor/rules/testing.mdc`.
+
+## Unit / integration
+
+Prefer **Vitest** or **Jest** depending on **`package.json`**. Mirror **Arrange–Act–Assert** and coverage expectations from the project **testing** rule.
+
+## End-to-end
+
+Use **Playwright** for **critical journeys** where the harness or team requires it — the **`frontend-evaluator`** subagent is Playwright-oriented for runtime product QA when the harness is active; keep Playwright specs and rubric-critical flows aligned.
+
+There is **no dedicated `e2e-runner` agent** here — use **`frontend-evaluator`**, harness flows, or CI Playwright suites as defined in the repo.

@@ -1,0 +1,47 @@
+---
+description: Security guidelines — pre-commit checks, secrets, incident response, security-reviewer
+alwaysApply: true
+---
+
+# Security guidelines
+
+Aligned with this repo’s **`security-reviewer`** subagent and **`.cursor/rules/code-review.mdc`**.
+
+---
+
+## Mandatory checks (before committing)
+
+- [ ] **No hardcoded secrets** (API keys, passwords, tokens, private URLs)
+- [ ] **Validate all user input** at trust boundaries (schema / types / bounds)
+- [ ] **Parameterized queries** or ORM equivalents—no string-built SQL with user input
+- [ ] **XSS**: no raw untrusted HTML; sanitize or render as plain text where appropriate
+- [ ] **CSRF** considered for cookie-based session flows that mutate state via browser
+- [ ] **Authn / authz** enforced on protected actions and routes
+- [ ] **Rate limiting** on public or abuse-prone endpoints (adjust to surface area—not every internal health ping needs the same throttle)
+- [ ] **Errors** don’t expose stack traces, tokens, or PII to clients
+
+PostgreSQL schema, RLS, and privilege model: involve **`database-reviewer`** after migrations or policy changes.
+
+---
+
+## Secret management
+
+- Do **not** commit secrets—use env vars or a managed secret store.
+- **Validate required secrets at startup** (fail fast with a clear missing-key message—never log values).
+- If a secret was exposed in git history, logs, or chat: **assume compromise**, **rotate**, and revoke where applicable.
+
+---
+
+## If you find or suspect a vulnerability
+
+1. **Stop** feature work that would widen exposure.
+2. Invoke the **`security-reviewer`** subagent for a structured pass on the affected area (and overlapping trust boundaries).
+3. Fix **CRITICAL** findings before merging or deploying.
+4. **Rotate** any credentials that may have leaked.
+5. **Scan** for the same mistake elsewhere (patterns, copied code, mirrored endpoints).
+
+Escalate to humans per your organization’s incident process when severity warrants it—this rule does not replace that.
+
+## API and MCP surfaces
+
+New or changed Route Handlers (`src/app/api/**`) and MCP tools: use **`security-reviewer`** for trust boundaries and **`api-reviewer`** for contract consistency, runtime smoke, and MCP-HTTP parity (`docs/project/feedback/<n>/api-review-i-i<n>.md`). When **`security-reviewer`** runs for the harness, it writes **`docs/project/feedback/security-review-i<n>.md`** (standalone; not pre-filled by the generator). See **`.cursor/rules/harness-discipline.mdc`**.

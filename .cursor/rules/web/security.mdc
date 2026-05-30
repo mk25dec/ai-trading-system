@@ -1,0 +1,30 @@
+---
+description: Web security — CSP, XSS, third parties, HTTPS headers, forms (extends project security rule)
+globs: "**/*.tsx,**/*.jsx,**/*.ts,**/middleware.ts,**/next.config.*,**/vite.config.*"
+alwaysApply: false
+---
+
+# Web security
+
+**Also follow** `.cursor/rules/security.mdc` — invoke **`security-reviewer`** for auth-heavy or user-generated HTML surfaces.
+
+## Content Security Policy
+
+Ship a **meaningful CSP in production**. Prefer **`nonce-{per-request}`** for scripts instead of blanket **`'unsafe-inline'`** when the stack supports nonces—tune **`connect-src`**, **`frame-src`**, **`img-src`** to real domains—no cargo-cult copy-paste.
+
+## XSS
+
+- No raw untrusted **`innerHTML` / `dangerouslySetInnerHTML`** without sanitization.
+- Prefer text nodes or sanitize with a reviewed lib + strict allowlist.
+
+## Third-party scripts
+
+`async` / `defer`; **SRI** from CDNs where applicable; revisit vendored scripts periodically; prefer self-hosted when supply-chain risk dominates.
+
+## Security headers
+
+HSTS (when HTTPS), **`X-Content-Type-Options: nosniff`**, frame control, sane **`Referrer-Policy`**, tight **`Permissions-Policy`** baseline—implement via platform (Next middleware, CDN, reverse proxy).
+
+## Forms
+
+CSRF tokens / double-submit cookie / framework defaults **where cookie sessions mutate state**, server-side validation + rate limiting on submits, light bot friction only when warranted.

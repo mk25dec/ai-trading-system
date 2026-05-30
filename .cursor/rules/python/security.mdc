@@ -1,0 +1,31 @@
+---
+description: Python security — env secrets, bandit scanning (extends project security rule)
+globs: "**/*.py,**/*.pyi"
+alwaysApply: false
+---
+
+# Python security
+
+**Also follow** `.cursor/rules/security.mdc` (project-wide); use **`security-reviewer`** subagent on sensitive flows.
+
+## Secret loading
+
+Prefer explicit failures when secrets are absent (avoid silent `None` for keys):
+
+```python
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+api_key = os.environ["OPENAI_API_KEY"]  # raises if missing — validate at startup in apps
+```
+
+## Static security scan
+
+- Run **Bandit** on application packages when tooling is available:
+
+```bash
+bandit -r src/
+```
+
+For Django-heavy stacks, supplement with Django-specific guides if this project adopts them.

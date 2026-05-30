@@ -1,0 +1,113 @@
+---
+description: TS/JS style — typed public APIs, interface vs type, no any, React props, immutability, errors, validation
+globs: "**/*.ts,**/*.tsx,**/*.js,**/*.jsx"
+alwaysApply: false
+---
+
+# TypeScript / JavaScript coding style
+
+Complements `.cursor/rules/coding-style.mdc` (immutable updates, naming) — **this file owns TS/JS typing conventions**.
+
+## Types and interfaces
+
+Use types to keep public APIs and shared shapes explicit.
+
+### Public APIs
+
+- Annotate exported functions, utilities, public class methods (**params + returns**).
+- Let TS infer locals when obvious.
+- Extract repeated inline object shapes into **named types** or interfaces.
+
+```typescript
+// Avoid: exported without explicit types
+export function formatUser(user: { firstName: string; lastName: string }) {
+  return `${user.firstName} ${user.lastName}`;
+}
+
+interface User {
+  firstName: string;
+  lastName: string;
+}
+
+export function formatUser(user: User): string {
+  return `${user.firstName} ${user.lastName}`;
+}
+```
+
+### Interface vs type
+
+- **`interface`** — extendable/implementable object shapes.
+- **`type`** — unions, intersections, tuples, mapped utilities.
+- Prefer **string literal unions** over **`enum`** unless interop demands `enum`.
+
+```typescript
+interface User {
+  id: string;
+  email: string;
+}
+
+type UserRole = "admin" | "member";
+type UserWithRole = User & { role: UserRole };
+```
+
+### Avoid `any`
+
+- Prefer **`unknown`** at boundaries, narrow safely.
+- Use **generics** when the caller supplies the concrete type.
+
+```typescript
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return "Unexpected error";
+}
+```
+
+### React props
+
+- Named **`interface` or `type`** for props; type callbacks explicitly.
+- Avoid **`React.FC`** unless there is a concrete reason.
+
+### `.js` / `.jsx`
+
+When not migrated to TS, use **JSDoc** aligned with runtime behavior:
+
+```javascript
+/** @param {{ firstName: string, lastName: string }} user @returns {string} */
+export function formatUser(user) {
+  return `${user.firstName} ${user.lastName}`;
+}
+```
+
+## Immutability
+
+Prefer non-mutating updates (`spread`, immutable helpers):
+
+```typescript
+function updateUser(user: Readonly<User>, name: string): User {
+  return { ...user, name };
+}
+```
+
+## Errors
+
+Use **`async`/`await` + `try`/`catch`**, treat caught values as **`unknown`**, normalize messages.
+
+## Validation at boundaries
+
+Use **schema libs** (**Zod**, **Valibot**, etc.) when the stack already uses them:
+
+```typescript
+import { z } from "zod";
+
+const userSchema = z.object({
+  email: z.string().email(),
+  age: z.number().int().min(0).max(150),
+});
+
+type UserInput = z.infer<typeof userSchema>;
+const validated: UserInput = userSchema.parse(input);
+```
+
+## Logging
+
+No **`console.log`** on production-bound paths — use structured logging (**pino**, **winston**, etc.) per repo standards.

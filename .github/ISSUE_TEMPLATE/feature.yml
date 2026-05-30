@@ -1,0 +1,63 @@
+name: Feature or task
+description: Harness-aligned work item — links to project docs and per-issue spec after Phase 1
+title: "[area] "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Copy fields from [`docs/project/templates/github-issue.md`](../../docs/project/templates/github-issue.md).
+        After Phase 1, link `docs/project/issues/NNN/spec.md` and `rubric.md`.
+
+  - type: dropdown
+    id: size
+    attributes:
+      label: Size
+      description: Agent proposes; human confirms before planning
+      options:
+        - S
+        - M
+        - L
+        - XL
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: One paragraph — what and why
+    validations:
+      required: true
+
+  - type: textarea
+    id: spec_reference
+    attributes:
+      label: Spec reference
+      description: Links to project.md section, roadmap phase, and issue spec paths when available
+      value: |
+        - **Project:** `docs/project/project.md` — section:
+        - **Roadmap:** `docs/project/roadmap.md` — Phase / subtask:
+        - **Issue spec:** `docs/project/issues/NNN/spec.md` _(after Phase 1)_
+        - **Rubric:** `docs/project/issues/NNN/rubric.md`
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance criteria
+      description: Testable checklist
+      value: |
+        - [ ]
+        - [ ] plan → generate → review completed
+        - [ ] CI green per `docs/project/setup.md`
+    validations:
+      required: true
+
+  - type: textarea
+    id: adrs
+    attributes:
+      label: Related ADRs
+      description: Links or "none"
+      value: none

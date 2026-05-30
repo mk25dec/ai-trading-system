@@ -1,0 +1,13 @@
+---
+description: Go API security — JWT cookies, internal API key, tenancy
+globs: "api/**/*.go"
+alwaysApply: false
+---
+
+# Go API security
+
+- JWT in HttpOnly cookies; `SECURE_COOKIES=true` in production (HTTPS)
+- `X-Internal-Api-Key` on `/internal/*` only — never expose internal routes on public CORS
+- Workspace membership checked before watchlist, research, or signals mutations
+- Never log tokens, `INTERNAL_API_KEY`, or raw API keys
+- Validate external payloads (n8n, Alpaca, FinBERT) at service boundary

@@ -1,0 +1,13 @@
+---
+description: Go testing — table tests, regression for decision engine
+globs: "api/**/*_test.go"
+alwaysApply: false
+---
+
+# Go testing
+
+- Run: `cd api && go test ./...`
+- Every bug fix in `internal/services` or `internal/calibration` gets a regression test before the fix
+- Prefer table-driven tests for scoring, calibration, and aggregation
+- Use `t.Helper()` in test helpers; no order-dependent suites
+- Integration tests that need Postgres: document in `docs/project/setup.md` (local Docker dev DB)

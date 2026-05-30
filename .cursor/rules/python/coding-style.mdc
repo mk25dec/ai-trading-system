@@ -1,0 +1,39 @@
+---
+description: Python style — PEP 8, annotations, immutable DTOs, black/isort/ruff
+globs: "**/*.py,**/*.pyi"
+alwaysApply: false
+---
+
+# Python coding style
+
+Align conceptual overlap (immutability, simplicity) with the project **`coding-style`** rule where it makes sense — **Python idioms win** (`snake_case`, etc.).
+
+## Standards
+
+- Follow **PEP 8**.
+- Use **type annotations** on exported and non-trivial function signatures.
+
+## Immutability
+
+Prefer immutable/value-style models where it fits:
+
+```python
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class User:
+    name: str
+    email: str
+
+from typing import NamedTuple
+
+class Point(NamedTuple):
+    x: float
+    y: float
+```
+
+## Formatting / lint
+
+- **Black** (or **`ruff format`**) for formatting.
+- **`isort`** or **ruff’s import sorting** for imports.
+- **Ruff** for lint (+ optional **mypy**/**pyright** for types) — match what this repo configures in `pyproject.toml` / CI.

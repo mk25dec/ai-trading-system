@@ -1,0 +1,68 @@
+---
+description: Code review standards, severity, subagent delegation — pairs with orchestration.mdc
+globs: src/**,db/**,tests/**,**/*.{ts,tsx,js,jsx,py}
+alwaysApply: false
+---
+
+# Code review standards
+
+Orchestration loop: [`.cursor/rules/orchestration.mdc`](orchestration.mdc). This rule covers **review quality and delegation**, not the full harness loop.
+
+## Purpose
+
+Keep quality, security, and maintainability high before commits and merges. Use **subagents** (`.cursor/agents/`) for focused passes—not inline chat pretending to be independent review.
+
+**Independence:** Each harness review file under `docs/project/feedback/<n>/` is **authored by one subagent**. The **generator** must not pre-fill reviewer files.
+
+## When review is mandatory
+
+- After substantive application code changes (not doc-only typos).
+- Before pushing to shared branches or opening/merging PRs.
+- When touching **security-sensitive** areas: auth, sessions, payments, PII, uploads, webhooks.
+- When making **architectural** or **data-layer** changes (call **architect** for design; still run code/security/DB review as applicable).
+
+## Quick checklist
+
+- Readable names; focused functions (prefer under ~50 lines); cohesive files (prefer under ~800 lines).
+- No deep nesting without justification; errors handled explicitly.
+- No secrets in source; no stray `console.log` in production paths.
+- New behavior has tests where the stack allows; ~80% coverage on touched logic when tooling exists.
+
+## Subagents this project uses
+
+| Subagent | Use for | Harness output |
+|----------|---------|----------------|
+| **code-reviewer** | TS/JS/Python quality; typecheck/lint/test gates | `feedback/<n>/code-review-i<i>.md` |
+| **api-reviewer** | Route handlers, HTTP/MCP contracts | `api-review-i<i>.md` |
+| **mcp-reviewer** | MCP tools, schemas, transport | `mcp-review-i<i>.md` |
+| **security-reviewer** | OWASP, secrets, trust boundaries | `security-review-i<i>.md` |
+| **database-reviewer** | Migrations, SQL, RLS, indexes | `database-review-i<i>.md` |
+| **frontend-evaluator** | Live UI vs rubrics (Playwright) | `frontend-eval-i<i>.md` |
+| **performance-evaluator** | Perf budgets, Lighthouse | `performance-eval-i<i>.md` |
+| **doc-updater** | User docs **after** other reviewers PASS | `docs-review-i<i>.md` |
+
+## Severity
+
+| Level | Meaning | Action |
+|-------|---------|--------|
+| **CRITICAL** | Security or data-loss risk | **BLOCK** |
+| **HIGH** | Bug or serious quality issue | **BLOCK** |
+| **MEDIUM** | Maintainability | **INFO** |
+| **LOW** | Style / minor | **NOTE** |
+
+## Workflow
+
+1. Understand the diff.
+2. Run **security-reviewer** when security triggers match.
+3. Run **database-reviewer** when SQL/migrations/schema/RLS change.
+4. Run **api-reviewer** / **mcp-reviewer** when HTTP/MCP contracts change.
+5. Run **code-reviewer** for substantive code.
+6. Run tests per `docs/project/setup.md`.
+
+## Approval
+
+- **Approve** — no CRITICAL or HIGH open
+- **Warning** — HIGH only, merge with caution
+- **Block** — CRITICAL present
+
+Flag PRs with architectural change and no linked ADR. User-facing doc drift: **doc-updater** after PASS.

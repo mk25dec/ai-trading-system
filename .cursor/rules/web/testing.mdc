@@ -1,0 +1,50 @@
+---
+description: Web testing — visual regression priority, a11y, perf, browsers, responsive + Playwright shape
+globs: "**/*.tsx,**/*.jsx,**/*.ts"
+alwaysApply: false
+---
+
+# Web testing
+
+Overlaps `.cursor/rules/testing.mdc`; pair with **`.cursor/rules/typescript/testing`** for unit/spec files next to UI code.
+
+## Priority ladder
+
+### 1. Visual regression
+
+Playwright screenshots at **320, 768, 1024, 1440** (extend as needed) for hero/editorial states; dual themes **if shipped**.
+
+### 2. Accessibility
+
+Automated axe (or equiv.) plus **manual keyboard**, **`:prefers-reduced-motion`**, **contrast**.
+
+### 3. Performance smoke
+
+Meaningful pages vs targets in **`web/performance`** (Lighthouse/class CI perf).
+
+### 4. Cross-browser spot checks
+
+Chrome + Firefox (+ Safari/macOS viewport when feasible)—scroll + motion sane.
+
+### 5. Responsive
+
+320 → 1920 ladders; overflow + touch taps.
+
+## E2E example (deterministic waits)
+
+```ts
+import { test, expect } from "@playwright/test";
+
+test("landing hero renders", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator("h1")).toBeVisible();
+});
+```
+
+Prefer **locators + assertions** instead of brittle fixed **`waitForTimeout`**.
+
+## Unit layer
+
+Exercise pure utilities + hooks logic; brittle DOM snapshots rarely beat visual diff for churny marketing UI—but keep **coverage** commitments from the repo **testing** rule.
+
+Harmonize with **`frontend-evaluator`** rubric breakpoints when harness mode is active.

@@ -1,0 +1,17 @@
+---
+description: TS/JS editor workflow — prettier/format, ESLint/tsc after edits; avoid stray console.log
+globs: "**/*.ts,**/*.tsx,**/*.js,**/*.jsx"
+alwaysApply: false
+---
+
+# TypeScript / JavaScript editor workflow
+
+In **Cursor**, prefer editor **format on save**, **`.cursor/hooks.json`** reminders when present, and **project scripts**.
+
+After substantive edits:
+
+- **Format**: Prettier / **Biome** / **eslint --fix** as configured.
+- **Typecheck**: `pnpm run typecheck` / **`tsc --noEmit`** (or workspace equivalent).
+- **Lint**: ESLint (or Biome lint) scoped to touched packages when monorepo.
+
+Treat **`console.log`** in prod paths like temporary debug — remove or replace with **`code-reviewer`**-appropriate logging before merge unless the codebase clearly allows it (e.g. CLI).

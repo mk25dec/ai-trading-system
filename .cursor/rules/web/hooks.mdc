@@ -1,0 +1,25 @@
+---
+description: Web toolchain order — format, lint, incremental typecheck + optional Cursor hooks patterns
+globs: "**/*.tsx,**/*.jsx,**/*.css"
+alwaysApply: false
+---
+
+# Web editor / automation workflow
+
+Use **repo-local** **`pnpm` / `npm`** scripts—no arbitrary remote tooling.
+
+## Recommended order after edits
+
+1. **Format** — Prettier or Biome (project config wins).
+2. **Lint** — ESLint (**`eslint --fix`**) where configured.
+3. **Typecheck** — **`pnpm run typecheck`** or **`tsc --noEmit`**. Prefer **`--incremental`** + explicit **`tsBuildInfoFile`** for speed on large apps when applicable; consider a **`timeout`** (or IDE cancel) so stuck `tsc` runs cannot pile up.
+4. **Optional CSS lint** — stylelint/postcss when present.
+5. **Session sanity** — **`pnpm build`** (or staging build) before merge—not necessarily after every keystroke.
+
+## Cursor hooks
+
+Projects can wire **`.cursor/hooks.json`** + **`.cursor/hooks/*`** to run formatters here or to remind the agent post-edit (see **`create-hook`** skill and this repo’s **`shell-guard`** / **`post-write-remind`** hooks). Mirror repo scripts with workspace-relative paths rather than copying unrelated `settings.json` samples.
+
+## File size discipline
+
+Prefer **focused modules**: if a UI file blows past **~800 lines**, split by feature—not a hard OS hook requirement unless you automate it.

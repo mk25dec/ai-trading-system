@@ -1,5 +1,6 @@
 .env
 .env.local
+.env.*.local
 *.local
 
 # Go
@@ -9,13 +10,32 @@ api/tmp/
 # Node
 web/node_modules/
 web/dist/
+build/
+
+# Python
+__pycache__/
+*.egg-info/
+.venv/
+venv/
+notebooks/.venv/
 
 # OS / IDE
 .DS_Store
 .idea/
+*.swp
 .vscode/*
 !.vscode/extensions.json
 
-# DuckDB / data (future)
+# Cursor session logs
+.cursor/hooks/logs/
+
+# Test / coverage
+coverage/
+.playwright/
+test-results/
+npm-debug.log*
+*.log
+
+# DuckDB / data
 data/
 *.duckdb

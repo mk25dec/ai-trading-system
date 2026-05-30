@@ -1,0 +1,53 @@
+---
+description: FastAPI — app factory, thin routers, async I/O, DI, schemas, CORS/auth hardening
+globs: "**/app/**/*.py,**/fastapi/**/*.py,**/*_api.py"
+alwaysApply: false
+---
+
+# FastAPI
+
+Use **with** general Python rules in `python/` and project **`security`** / **`agents`** (**`database-reviewer`**, **`security-reviewer`**) when handling data and auth.
+
+## Structure
+
+- Expose **`create_app()`** (or equivalent) for app assembly.
+- Keep **routers thin**; persistence and domain logic live in services / use-cases / repositories.
+- Split **request**, **update**, and **response** schemas; never leak secrets via response models.
+
+## Async
+
+- Use **`async def`** when the route awaits I/O.
+- Prefer **async** DB/HTTP clients from async endpoints.
+- **Do not** call blocking **`requests`**, sync ORM/network/file work inside async handlers without an executor — offload or sync route.
+
+## Dependency injection
+
+Use **`Depends`** for DB sessions and auth — no ad-hoc `SessionLocal()` in handlers:
+
+```python
+@router.get("/users/{user_id}")
+async def get_user(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    ...
+```
+
+## Schemas
+
+- Omit passwords, hashes, tokens, refresh material from **response** models (`response_model=...`).
+- Prefer **Pydantic** constraints over one-off validators when they express the rule clearly.
+
+## Security
+
+- Configure **CORS** per environment; avoid **wildcard origins + credentials**.
+- Validate **JWT** `exp`, **`iss`**, **`aud`**, **`alg`** as applicable.
+- **Rate-limit** auth and destructive/write-heavy routes.
+- **Redact** auth headers, cookies, tokens from logs.
+
+## Testing
+
+- **Override dependencies** exercised via `Depends` for tests.
+- Clear **`dependency_overrides`** after tests tear down isolated app instances.
+- Use **async** HTTP clients/tests for async apps.
