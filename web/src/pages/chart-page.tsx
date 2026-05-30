@@ -16,6 +16,18 @@ import {
 import { useWorkspace } from "@/hooks/use-workspace"
 import { pipelineApi, type PriceChartTimeframe } from "@/lib/pipeline-api"
 
+const LIVE_POLL_MS: Record<PriceChartTimeframe, number> = {
+  "30Min": 30_000,
+  "1Day": 5 * 60_000,
+}
+
+function formatRefreshedAt(iso?: string): string | null {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+  return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+}
+
 export function ChartPage() {
   const queryClient = useQueryClient()
   const { workspaceId, selectWorkspace, workspaces } = useWorkspace()
@@ -43,15 +55,18 @@ export function ChartPage() {
   }, [symbol, symbols])
 
   const series = useQuery({
-    queryKey: ["price-chart", workspaceId, symbol, timeframe],
-    queryFn: () => pipelineApi.priceChart(workspaceId, symbol, timeframe),
+    queryKey: ["price-chart-live", workspaceId, symbol, timeframe],
+    queryFn: () => pipelineApi.priceChartLive(workspaceId, symbol, timeframe),
     enabled: !!workspaceId && !!symbol,
+    refetchInterval: LIVE_POLL_MS[timeframe],
+    refetchIntervalInBackground: true,
+    placeholderData: (prev) => prev,
   })
 
   const sync = useMutation({
     mutationFn: () => pipelineApi.syncPriceChart(workspaceId),
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["price-chart", workspaceId] })
+      queryClient.invalidateQueries({ queryKey: ["price-chart-live", workspaceId] })
       toast.success(
         `Synced ${data.symbolsProcessed} symbols — ${data.candlesFetched} bars, ${data.predictionsUpdated} predictions`,
       )
@@ -64,6 +79,8 @@ export function ChartPage() {
 
   const withPred = series.data?.points.filter((p) => p.predictedPrice1 != null).length ?? 0
   const tfLabel = timeframe === "30Min" ? "30-minute" : "daily"
+  const refreshedLabel = formatRefreshedAt(series.data?.refreshedAt)
+  const pollSeconds = LIVE_POLL_MS[timeframe] / 1000
 
   return (
     <div className="space-y-6">
@@ -71,11 +88,10 @@ export function ChartPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Price chart</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Watchlist symbols only. Alpaca <span className="font-medium text-foreground">30Min</span>{" "}
-            source prices at every bar timestamp (continuous time axis, gaps overnight/weekends) with
-            walk-forward <span className="font-medium text-foreground">predicted_price1</span> on the
-            same points. Sync loads ~60 days intraday plus ~3 years daily. Switch to daily for
-            end-of-day closes.
+            Watchlist symbols only. Live Alpaca <span className="font-medium text-foreground">30Min</span>{" "}
+            bars refresh every {pollSeconds}s (daily every 5 min) with walk-forward{" "}
+            <span className="font-medium text-foreground">predicted_price1</span>. Use Sync history once
+            for full backfill (~60 days intraday, ~3 years daily).
           </p>
         </div>
         <WorkspaceToolbar
@@ -92,9 +108,23 @@ export function ChartPage() {
         <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <CardTitle className="text-base">Actual vs predicted</CardTitle>
-            <CardDescription>
-              {series.data?.points.length ?? 0} {tfLabel} bars
-              {withPred > 0 ? ` · ${withPred} with prediction` : " · run Sync to backfill"}
+            <CardDescription className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span>
+                {series.data?.points.length ?? 0} {tfLabel} bars
+                {withPred > 0 ? ` · ${withPred} with prediction` : " · run Sync to backfill"}
+              </span>
+              {refreshedLabel ? (
+                <span className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+                  <span className="relative flex size-2">
+                    <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+                    <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
+                  </span>
+                  Live · updated {refreshedLabel}
+                </span>
+              ) : null}
+              {series.isFetching && !series.isLoading ? (
+                <span className="text-muted-foreground">Refreshing…</span>
+              ) : null}
             </CardDescription>
           </div>
           <div className="flex flex-wrap items-center gap-2">

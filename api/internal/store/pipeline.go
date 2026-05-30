@@ -429,7 +429,12 @@ func (s *PipelineStore) UpsertCandles(ctx context.Context, candles []models.Mark
 		batch.Queue(`
 			INSERT INTO market_candles (symbol, timeframe, ts, open, high, low, close, volume, source)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-			ON CONFLICT (symbol, timeframe, ts, source) DO NOTHING`,
+			ON CONFLICT (symbol, timeframe, ts, source) DO UPDATE SET
+				open = EXCLUDED.open,
+				high = EXCLUDED.high,
+				low = EXCLUDED.low,
+				close = EXCLUDED.close,
+				volume = EXCLUDED.volume`,
 			c.Symbol, c.Timeframe, c.Timestamp, c.Open, c.High, c.Low, c.Close, c.Volume, c.Source)
 	}
 	br := s.pool.SendBatch(ctx, batch)

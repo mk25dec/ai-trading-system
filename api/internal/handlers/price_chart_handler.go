@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/joeydekruis/ai-trading-system/api/internal/middleware"
@@ -52,6 +53,51 @@ func (h PriceChartHandler) GetSeries(w http.ResponseWriter, r *http.Request) {
 		Symbol:    symbol,
 		Timeframe: timeframe,
 		Points:    points,
+	})
+}
+
+func (h PriceChartHandler) GetLiveSeries(w http.ResponseWriter, r *http.Request) {
+	workspaceID := chi.URLParam(r, "id")
+	user := middleware.UserFromContext(r.Context())
+	if !h.canAccessWorkspace(r, workspaceID, user) {
+		WriteError(w, http.StatusForbidden, "access denied")
+		return
+	}
+	symbol := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("symbol")))
+	if symbol == "" {
+		WriteError(w, http.StatusBadRequest, "symbol query required")
+		return
+	}
+	ok, err := watchlistContainsSymbol(r.Context(), h.Store, workspaceID, symbol)
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "watchlist check failed")
+		return
+	}
+	if !ok {
+		WriteError(w, http.StatusForbidden, "symbol not on workspace watchlist")
+		return
+	}
+	timeframe := normalizeChartTimeframe(r.URL.Query().Get("timeframe"))
+	if h.Alpaca != nil && h.Alpaca.Key != "" {
+		if _, _, err := services.RefreshSymbolChartBars(r.Context(), h.Store, h.Alpaca, symbol, timeframe); err != nil {
+			WriteError(w, http.StatusBadGateway, "alpaca refresh failed: "+err.Error())
+			return
+		}
+	}
+	points, err := h.Store.ListPriceChartPoints(r.Context(), symbol, timeframe)
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "chart query failed")
+		return
+	}
+	if points == nil {
+		points = []models.PriceChartPoint{}
+	}
+	now := time.Now().UTC()
+	writeJSON(w, http.StatusOK, models.PriceChartSeries{
+		Symbol:      symbol,
+		Timeframe:   timeframe,
+		Points:      points,
+		RefreshedAt: &now,
 	})
 }
 

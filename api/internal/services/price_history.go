@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strings"
 
 	"github.com/joeydekruis/ai-trading-system/api/internal/store"
 )
@@ -13,6 +14,12 @@ const AlpacaWatchlistHistoryDays = 1095
 
 // AlpacaIntradayHistoryDays is lookback for 30Min bars on the price chart.
 const AlpacaIntradayHistoryDays = 60
+
+// ChartLiveRefreshDays30Min is lookback when polling Alpaca for live intraday updates.
+const ChartLiveRefreshDays30Min = 3
+
+// ChartLiveRefreshDaysDaily is lookback when polling Alpaca for live daily updates.
+const ChartLiveRefreshDaysDaily = 7
 
 // SyncWatchlistPriceHistory fetches Alpaca daily + 30Min bars and backfills predicted_price1.
 func SyncWatchlistPriceHistory(
@@ -62,6 +69,44 @@ func SyncWatchlistPriceHistory(
 		predictionsUpdated += n
 	}
 	return candlesFetched, predictionsUpdated, nil
+}
+
+// RefreshSymbolChartBars fetches recent Alpaca bars for one watchlist symbol/timeframe,
+// upserts OHLCV (including the forming bar), and recomputes predicted_price1.
+func RefreshSymbolChartBars(
+	ctx context.Context,
+	st *store.PipelineStore,
+	alpaca *AlpacaClient,
+	symbol, timeframe string,
+) (candlesFetched, predictionsUpdated int, err error) {
+	if alpaca == nil || alpaca.Key == "" {
+		return 0, 0, fmt.Errorf("alpaca credentials not configured")
+	}
+	symbol = strings.ToUpper(strings.TrimSpace(symbol))
+	if symbol == "" {
+		return 0, 0, fmt.Errorf("symbol required")
+	}
+	timeframe = strings.TrimSpace(timeframe)
+	if timeframe == "" {
+		timeframe = ChartIntradayTimeframe
+	}
+	days := ChartLiveRefreshDaysDaily
+	if timeframe == ChartIntradayTimeframe {
+		days = ChartLiveRefreshDays30Min
+	}
+	bars, err := alpaca.FetchBars(ctx, []string{symbol}, timeframe, days)
+	if err != nil {
+		if strings.Contains(err.Error(), "returned 0") {
+			n, predErr := BackfillSymbolPredictions(ctx, st, symbol, timeframe)
+			return 0, n, predErr
+		}
+		return 0, 0, err
+	}
+	if _, err := st.UpsertCandles(ctx, bars); err != nil {
+		return 0, 0, err
+	}
+	n, err := BackfillSymbolPredictions(ctx, st, symbol, timeframe)
+	return len(bars), n, err
 }
 
 // BackfillSymbolPredictions recomputes predicted_price1 for alpaca rows of a symbol/timeframe.

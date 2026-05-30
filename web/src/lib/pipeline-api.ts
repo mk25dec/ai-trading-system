@@ -302,6 +302,7 @@ export interface PriceChartSeries {
   symbol: string
   timeframe: PriceChartTimeframe
   points: PriceChartPoint[]
+  refreshedAt?: string
 }
 
 export interface PriceChartSyncResult {
@@ -351,6 +352,10 @@ export const pipelineApi = {
   priceChart: (workspaceId: string, symbol: string, timeframe: PriceChartTimeframe = "30Min") =>
     api.get<PriceChartSeries>(
       `/api/v1/workspaces/${workspaceId}/price-chart?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframe)}`,
+    ),
+  priceChartLive: (workspaceId: string, symbol: string, timeframe: PriceChartTimeframe = "30Min") =>
+    api.get<PriceChartSeries>(
+      `/api/v1/workspaces/${workspaceId}/price-chart/live?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframe)}`,
     ),
   syncPriceChart: (workspaceId: string) =>
     api.post<PriceChartSyncResult>(

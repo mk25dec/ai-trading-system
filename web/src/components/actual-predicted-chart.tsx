@@ -160,7 +160,10 @@ export function ActualPredictedChart({
     if (!chartRef.current) {
       chartRef.current = echarts.init(containerRef.current, undefined, { renderer: "canvas" })
     }
-    chartRef.current.setOption(buildOption(points, symbol, timeframe), { notMerge: true })
+    chartRef.current.setOption(buildOption(points, symbol, timeframe), {
+      notMerge: false,
+      lazyUpdate: true,
+    })
     chartRef.current.resize()
   }, [points, symbol, timeframe])
 
@@ -176,6 +179,10 @@ export function ActualPredictedChart({
   }, [render])
 
   if (points.length < 2) {
+    const intradayHint =
+      timeframe === "30Min"
+        ? "No 30-minute bars yet — use Sync history on this page (Research Refresh only loads daily bars)."
+        : "No price history — sync Alpaca data for this symbol."
     return (
       <div
         className={cn(
@@ -184,7 +191,7 @@ export function ActualPredictedChart({
         )}
         style={{ height }}
       >
-        No price history — sync Alpaca data for this symbol
+        {intradayHint}
       </div>
     )
   }

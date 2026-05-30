@@ -58,9 +58,10 @@ type PriceChartPoint struct {
 }
 
 type PriceChartSeries struct {
-	Symbol    string            `json:"symbol"`
-	Timeframe string            `json:"timeframe"`
-	Points    []PriceChartPoint `json:"points"`
+	Symbol      string            `json:"symbol"`
+	Timeframe   string            `json:"timeframe"`
+	Points      []PriceChartPoint `json:"points"`
+	RefreshedAt *time.Time        `json:"refreshedAt,omitempty"`
 }
 
 type PriceChartSyncResult struct {
