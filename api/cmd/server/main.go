@@ -226,6 +226,12 @@ func registerAPIRoutes(r chi.Router, cfg config.Config, pool *pgxpool.Pool) {
 		},
 		Alpaca: alpacaClient,
 	}
+	finbertHandler := handlers.FinbertHandler{
+		Finbert: &services.FinbertClient{
+			BaseURL: cfg.FinbertURL,
+			APIKey:  cfg.FinbertAPIKey,
+		},
+	}
 	priceChartHandler := handlers.PriceChartHandler{
 		Store:      pipeline,
 		Workspaces: workspaces,
@@ -252,6 +258,8 @@ func registerAPIRoutes(r chi.Router, cfg config.Config, pool *pgxpool.Pool) {
 			r.Use(appmw.RequireAuth(cfg.JWTSecret, loadUser))
 			r.Get("/auth/me", authHandler.Me)
 			r.Get("/analytics/status", analyticsHandler.Status)
+			r.Post("/finbert/analyze", finbertHandler.Analyze)
+			r.Get("/finbert/health", finbertHandler.Health)
 
 			r.Get("/users/lookup", userHandler.Lookup)
 

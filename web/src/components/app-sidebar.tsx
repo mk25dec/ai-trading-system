@@ -4,6 +4,7 @@ import {
   ChartSpline,
   Building2,
   Database,
+  FlaskConical,
   LayoutDashboard,
   LineChart,
   LogOut,
@@ -36,6 +37,7 @@ const nav = [
   { title: "News", href: "/news", icon: Newspaper },
   { title: "Market data", href: "/symbols", icon: TrendingUp },
   { title: "Features", href: "/features", icon: BarChart3 },
+  { title: "TEST", href: "/test", icon: FlaskConical },
   { title: "Data operations", href: "/data-health", icon: Database },
   { title: "Workspaces", href: "/workspaces", icon: Building2 },
 ]

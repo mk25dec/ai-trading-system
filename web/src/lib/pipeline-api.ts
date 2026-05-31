@@ -314,6 +314,21 @@ export interface ResearchRefreshResult {
   errors?: string[]
 }
 
+export interface FinbertAnalyzeResult {
+  label: "positive" | "neutral" | "negative" | string
+  score: number
+  confidence: number
+  probPositive: number
+  probNegative: number
+  probNeutral: number
+  scores?: Record<string, number>
+}
+
+export interface FinbertHealthResult {
+  status: string
+  raw?: Record<string, unknown>
+}
+
 export const pipelineApi = {
   workflowRuns: () => api.get<WorkflowRun[]>("/api/v1/workflows/runs"),
   newsBacklog: (workspaceId: string, status?: string) =>
@@ -350,4 +365,7 @@ export const pipelineApi = {
     api.post<PriceChartSyncResult>(
       `/api/v1/workspaces/${workspaceId}/price-chart/sync`,
     ),
+  analyzeFinbert: (text: string) =>
+    api.post<FinbertAnalyzeResult>("/api/v1/finbert/analyze", { text }),
+  finbertHealth: () => api.get<FinbertHealthResult>("/api/v1/finbert/health"),
 }

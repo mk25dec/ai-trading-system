@@ -13,6 +13,7 @@ import { SymbolsPage } from "@/pages/symbols-page"
 import { FeaturesPage } from "@/pages/features-page"
 import { ChartPage } from "@/pages/chart-page"
 import { ResearchPage } from "@/pages/research-page"
+import { TestPage } from "@/pages/test-page"
 import { WorkspaceSignalsPage } from "@/pages/workspace-signals-page"
 import { UsersPage } from "@/pages/users-page"
 import { WorkspacesPage } from "@/pages/workspaces-page"
@@ -46,6 +47,7 @@ export default function App() {
                   <Route path="news" element={<NewsPage />} />
                   <Route path="symbols" element={<SymbolsPage />} />
                   <Route path="features" element={<FeaturesPage />} />
+                  <Route path="test" element={<TestPage />} />
                   <Route path="workspaces" element={<WorkspacesPage />} />
                   <Route path="workspaces/:id/members" element={<WorkspaceMembersPage />} />
                   <Route path="workspaces/:id/signals" element={<WorkspaceSignalsPage />} />

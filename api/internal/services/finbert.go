@@ -17,6 +17,24 @@ type FinbertClient struct {
 	Client  *http.Client
 }
 
+// FinbertError is returned when the FinBERT HTTP API responds with a non-OK status.
+type FinbertError struct {
+	StatusCode int
+	Message    string
+}
+
+func (e *FinbertError) Error() string {
+	if e.Message != "" {
+		return e.Message
+	}
+	return fmt.Sprintf("finbert status %d", e.StatusCode)
+}
+
+type FinbertHealth struct {
+	Status string         `json:"status"`
+	Raw    map[string]any `json:"raw,omitempty"`
+}
+
 type FinbertResult struct {
 	Label        string
 	Score        float64
@@ -54,6 +72,44 @@ type finbertBatchResp struct {
 	} `json:"results"`
 }
 
+func (c *FinbertClient) Health(ctx context.Context) (FinbertHealth, error) {
+	if c.BaseURL == "" {
+		return FinbertHealth{}, fmt.Errorf("FINBERT_URL not configured")
+	}
+	if c.Client == nil {
+		c.Client = &http.Client{Timeout: 30 * time.Second}
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/health", nil)
+	if err != nil {
+		return FinbertHealth{}, err
+	}
+	if c.APIKey != "" {
+		req.Header.Set("X-Api-Key", c.APIKey)
+	}
+
+	resp, err := c.Client.Do(req)
+	if err != nil {
+		return FinbertHealth{}, err
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	if resp.StatusCode != http.StatusOK {
+		return FinbertHealth{}, finbertHTTPError(resp.StatusCode, body)
+	}
+
+	var raw map[string]any
+	if len(body) > 0 {
+		_ = json.Unmarshal(body, &raw)
+	}
+	status := "unknown"
+	if s, ok := raw["status"].(string); ok && s != "" {
+		status = s
+	}
+	return FinbertHealth{Status: status, Raw: raw}, nil
+}
+
 func (c *FinbertClient) Analyze(ctx context.Context, text string) (label string, score float64, confidence float64, err error) {
 	res, err := c.AnalyzeFull(ctx, text)
 	if err != nil {
@@ -88,7 +144,7 @@ func (c *FinbertClient) AnalyzeFull(ctx context.Context, text string) (FinbertRe
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return FinbertResult{}, fmt.Errorf("finbert status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return FinbertResult{}, finbertHTTPError(resp.StatusCode, body)
 	}
 
 	var data finbertAnalyzeResp
@@ -141,7 +197,7 @@ func (c *FinbertClient) AnalyzeBatch(ctx context.Context, items []FinbertBatchIt
 
 	if resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return nil, fmt.Errorf("finbert batch status %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))
+		return nil, finbertHTTPError(resp.StatusCode, b)
 	}
 
 	var data finbertBatchResp
@@ -155,6 +211,22 @@ func (c *FinbertClient) AnalyzeBatch(ctx context.Context, items []FinbertBatchIt
 		out[r.ID] = finbertResultFromResponse(finbertAnalyzeResp{Label: r.Label, Scores: r.Scores})
 	}
 	return out, nil
+}
+
+func finbertHTTPError(statusCode int, body []byte) error {
+	msg := strings.TrimSpace(string(body))
+	if statusCode == http.StatusServiceUnavailable {
+		if msg == "" {
+			msg = "FinBERT model still loading — retry in a minute"
+		}
+		return &FinbertError{StatusCode: statusCode, Message: msg}
+	}
+	if msg == "" {
+		msg = fmt.Sprintf("finbert status %d", statusCode)
+	} else {
+		msg = fmt.Sprintf("finbert status %d: %s", statusCode, msg)
+	}
+	return &FinbertError{StatusCode: statusCode, Message: msg}
 }
 
 func finbertResultFromResponse(data finbertAnalyzeResp) FinbertResult {
