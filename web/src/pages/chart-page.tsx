@@ -3,6 +3,7 @@ import { RefreshCw } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import { ActualPredictedChart } from "@/components/actual-predicted-chart"
+import { ChartSelectionAnalysisPanel } from "@/components/chart-selection-analysis-panel"
 import { WorkspaceToolbar } from "@/components/workspace-toolbar"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -14,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useWorkspace } from "@/hooks/use-workspace"
+import type { ChartSelectionAnalysis } from "@/lib/chart-selection-analysis"
 import { pipelineApi } from "@/lib/pipeline-api"
 
 /** Poll Alpaca snapshots + 1Min bars for near real-time prices. */
@@ -30,6 +32,8 @@ export function ChartPage() {
   const queryClient = useQueryClient()
   const { workspaceId, selectWorkspace, workspaces } = useWorkspace()
   const [symbol, setSymbol] = useState("")
+  const [selection, setSelection] = useState<ChartSelectionAnalysis | null>(null)
+  const [clearSelectionSignal, setClearSelectionSignal] = useState(0)
 
   const watchlist = useQuery({
     queryKey: ["watchlist", workspaceId],
@@ -50,6 +54,11 @@ export function ChartPage() {
       setSymbol(symbols[0])
     }
   }, [symbol, symbols])
+
+  useEffect(() => {
+    setSelection(null)
+    setClearSelectionSignal((n) => n + 1)
+  }, [symbol])
 
   const series = useQuery({
     queryKey: ["price-chart-live", workspaceId, symbol],
@@ -89,6 +98,7 @@ export function ChartPage() {
             refreshed every 5 seconds. Run{" "}
             <span className="font-medium text-foreground">Sync history</span> once for ~5 days of
             backfill and walk-forward <span className="font-medium text-foreground">predicted_price1</span>.
+            Drag on the chart to select a range and view price features for that window.
           </p>
         </div>
         <WorkspaceToolbar
@@ -163,11 +173,24 @@ export function ChartPage() {
           ) : series.isError ? (
             <p className="text-sm text-destructive">{series.error.message}</p>
           ) : (
-            <ActualPredictedChart
-              points={series.data?.points ?? []}
-              symbol={symbol}
-              height={440}
-            />
+            <div className="space-y-4">
+              <ActualPredictedChart
+                points={series.data?.points ?? []}
+                symbol={symbol}
+                height={440}
+                onSelectionChange={setSelection}
+                clearSelectionSignal={clearSelectionSignal}
+              />
+              {selection ? (
+                <ChartSelectionAnalysisPanel
+                  analysis={selection}
+                  onClear={() => {
+                    setSelection(null)
+                    setClearSelectionSignal((n) => n + 1)
+                  }}
+                />
+              ) : null}
+            </div>
           )}
         </CardContent>
       </Card>

@@ -2,6 +2,10 @@ import { useCallback, useEffect, useRef } from "react"
 import type { EChartsOption } from "echarts"
 import * as echarts from "echarts"
 import type { PriceChartPoint } from "@/lib/pipeline-api"
+import {
+  analyzeChartSelection,
+  type ChartSelectionAnalysis,
+} from "@/lib/chart-selection-analysis"
 import { cn } from "@/lib/utils"
 
 function parseTs(timestamp: string): number {
@@ -30,7 +34,34 @@ function buildOption(points: PriceChartPoint[], symbol: string): EChartsOption {
   return {
     backgroundColor: "transparent",
     animationDuration: 280,
-    grid: { left: 56, right: 24, top: 48, bottom: 56 },
+    grid: { left: 56, right: 24, top: 48, bottom: 88 },
+    toolbox: {
+      right: 12,
+      top: 4,
+      feature: {
+        brush: {
+          type: ["lineX", "clear"],
+          title: { lineX: "Select range", clear: "Clear selection" },
+        },
+        dataZoom: {
+          yAxisIndex: "none",
+          title: { zoom: "Zoom", back: "Reset zoom" },
+        },
+      },
+      iconStyle: { borderColor: "#64748b" },
+    },
+    brush: {
+      toolbox: ["lineX", "clear"],
+      xAxisIndex: 0,
+      brushMode: "single",
+      transformable: true,
+      brushStyle: {
+        borderWidth: 1,
+        color: "rgba(59, 130, 246, 0.12)",
+        borderColor: "rgba(59, 130, 246, 0.55)",
+      },
+      outOfBrush: { colorAlpha: 0.25 },
+    },
     legend: {
       top: 8,
       data: ["Live price", "Predicted (formula)"],
@@ -81,6 +112,20 @@ function buildOption(points: PriceChartPoint[], symbol: string): EChartsOption {
         return lines.join("<br/>")
       },
     },
+    dataZoom: [
+      { type: "inside", xAxisIndex: 0 },
+      {
+        type: "slider",
+        xAxisIndex: 0,
+        height: 22,
+        bottom: 12,
+        borderColor: "transparent",
+        backgroundColor: "rgba(148,163,184,0.12)",
+        fillerColor: "rgba(59,130,246,0.15)",
+        handleStyle: { color: "#64748b" },
+        textStyle: { color: "#64748b", fontSize: 10 },
+      },
+    ],
     xAxis: {
       type: "time",
       axisLabel: {
@@ -133,31 +178,97 @@ function buildOption(points: PriceChartPoint[], symbol: string): EChartsOption {
   }
 }
 
+type BrushEndEvent = {
+  areas?: Array<{ coordRange?: [number, number] }>
+}
+
 export function ActualPredictedChart({
   points,
   symbol,
   className,
   height = 420,
+  onSelectionChange,
+  clearSelectionSignal = 0,
 }: {
   points: PriceChartPoint[]
   symbol: string
   className?: string
   height?: number
+  onSelectionChange?: (analysis: ChartSelectionAnalysis | null) => void
+  /** Increment to clear the brush selection from the parent. */
+  clearSelectionSignal?: number
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<echarts.ECharts | null>(null)
+  const selectionRangeRef = useRef<[number, number] | null>(null)
+  const pointsRef = useRef(points)
+  pointsRef.current = points
+
+  const emitSelection = useCallback(
+    (range: [number, number] | null) => {
+      selectionRangeRef.current = range
+      if (!onSelectionChange) return
+      if (!range) {
+        onSelectionChange(null)
+        return
+      }
+      onSelectionChange(analyzeChartSelection(pointsRef.current, range[0], range[1]))
+    },
+    [onSelectionChange],
+  )
+
+  const restoreBrush = useCallback((chart: echarts.ECharts) => {
+    const range = selectionRangeRef.current
+    if (!range) return
+    chart.dispatchAction({
+      type: "brush",
+      areas: [
+        {
+          brushType: "lineX",
+          coordRange: range,
+          xAxisIndex: 0,
+        },
+      ],
+    })
+  }, [])
+
+  const bindBrush = useCallback(
+    (chart: echarts.ECharts) => {
+      chart.off("brushEnd")
+      chart.on("brushEnd", (params: unknown) => {
+        const event = params as BrushEndEvent
+        const areas = event.areas
+        if (!areas?.length) {
+          emitSelection(null)
+          return
+        }
+        const range = areas[0]?.coordRange
+        if (!range || range.length < 2) {
+          emitSelection(null)
+          return
+        }
+        emitSelection([range[0], range[1]])
+      })
+    },
+    [emitSelection],
+  )
 
   const render = useCallback(() => {
     if (!containerRef.current || points.length < 1) return
     if (!chartRef.current) {
       chartRef.current = echarts.init(containerRef.current, undefined, { renderer: "canvas" })
+      bindBrush(chartRef.current)
     }
     chartRef.current.setOption(buildOption(points, symbol), {
       notMerge: false,
       lazyUpdate: true,
     })
+    restoreBrush(chartRef.current)
     chartRef.current.resize()
-  }, [points, symbol])
+    if (selectionRangeRef.current) {
+      emitSelection(selectionRangeRef.current)
+    }
+  }, [bindBrush, emitSelection, points, restoreBrush, symbol])
 
   useEffect(() => {
     render()
@@ -169,6 +280,13 @@ export function ActualPredictedChart({
       chartRef.current = null
     }
   }, [render])
+
+  useEffect(() => {
+    if (clearSelectionSignal === 0) return
+    selectionRangeRef.current = null
+    chartRef.current?.dispatchAction({ type: "brush", command: "clear", areas: [] })
+    onSelectionChange?.(null)
+  }, [clearSelectionSignal, onSelectionChange])
 
   if (points.length < 1) {
     return (
@@ -186,12 +304,18 @@ export function ActualPredictedChart({
   }
 
   return (
-    <div
-      ref={containerRef}
-      className={cn("w-full rounded-xl border bg-card/50", className)}
-      style={{ height }}
-      role="img"
-      aria-label={`Live price chart for ${symbol}`}
-    />
+    <div className={cn("space-y-2", className)}>
+      <div
+        ref={containerRef}
+        className="w-full rounded-xl border bg-card/50"
+        style={{ height }}
+        role="img"
+        aria-label={`Live price chart for ${symbol}. Drag horizontally to select a range for analysis.`}
+      />
+      <p className="text-xs text-muted-foreground">
+        Drag on the chart (line-X brush in the toolbar) to select a time range — stats appear below.
+        Scroll or use the slider to zoom; double-click chart to reset zoom.
+      </p>
+    </div>
   )
 }
