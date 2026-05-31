@@ -158,22 +158,26 @@ export function NewsPage() {
                       {(article.symbols ?? []).map((s) => s.symbol).join(", ") || "—"}
                     </TableCell>
                     <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {(article.sentiment ?? []).map((s) => (
-                          <Badge
-                            key={`${article.id}-${s.symbol}`}
-                            variant={
-                              s.sentimentLabel === "positive"
-                                ? "default"
-                                : s.sentimentLabel === "negative"
-                                  ? "destructive"
-                                  : "secondary"
-                            }
-                          >
-                            {s.symbol}: {s.sentimentLabel}
-                          </Badge>
-                        ))}
-                      </div>
+                      {(article.sentiment ?? []).length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {(article.sentiment ?? []).map((s) => (
+                            <Badge
+                              key={`${article.id}-${s.symbol}`}
+                              variant={
+                                s.sentimentLabel === "positive"
+                                  ? "default"
+                                  : s.sentimentLabel === "negative"
+                                    ? "destructive"
+                                    : "secondary"
+                              }
+                            >
+                              {s.symbol}: {s.sentimentLabel}
+                            </Badge>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

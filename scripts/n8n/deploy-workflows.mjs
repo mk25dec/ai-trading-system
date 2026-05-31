@@ -151,7 +151,7 @@ function buildWorkflow(name, minutes, workflowName, workPath, extraBody) {
 const workflows = [
   buildWorkflow("01 News RSS Ingestion", 30, "news_rss_ingestion", "/internal/news/rss/ingest", `={{ JSON.stringify({ feedUrl: "${RSS_FEED}", source: "${RSS_SOURCE}" }) }}`),
   buildWorkflow("02 News Article Processing", 30, "news_article_processing", "/internal/news/backlog/process-batch", undefined),
-  buildWorkflow("03 News Symbol Mapping", 30, "news_symbol_mapping", "/internal/news/articles/map-symbols", undefined),
+  buildWorkflow("03 News Symbol Mapping", 30, "news_symbol_mapping", "/internal/news/articles/map-symbols?remap=true", undefined),
   buildWorkflow("04 News Sentiment", 30, "news_sentiment", "/internal/news/sentiment/run-batch", undefined),
   buildWorkflow("05 Market Data Alpaca", 60, "market_data_alpaca", "/internal/market/candles/ingest-alpaca", undefined),
   buildWorkflow("06 Market Features", 60, "market_features", "/internal/features/market/generate", undefined),

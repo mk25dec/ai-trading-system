@@ -115,6 +115,23 @@ func (s *PipelineStore) SetBacklogStatus(ctx context.Context, id string, status 
 	return err
 }
 
+func (s *PipelineStore) GetBacklogByID(ctx context.Context, id string) (models.NewsBacklogItem, error) {
+	row := s.pool.QueryRow(ctx, `
+		SELECT id, source, url, canonical_url, title, published_at, discovered_at, raw_symbol_guess, status, error_message, metadata, created_at, updated_at
+		FROM news_backlog WHERE id = $1`, id)
+	var item models.NewsBacklogItem
+	var rawGuess, meta []byte
+	if err := row.Scan(
+		&item.ID, &item.Source, &item.URL, &item.CanonicalURL, &item.Title, &item.PublishedAt, &item.DiscoveredAt,
+		&rawGuess, &item.Status, &item.ErrorMessage, &meta, &item.CreatedAt, &item.UpdatedAt,
+	); err != nil {
+		return item, err
+	}
+	_ = json.Unmarshal(rawGuess, &item.RawSymbolGuess)
+	_ = json.Unmarshal(meta, &item.Metadata)
+	return item, nil
+}
+
 func (s *PipelineStore) UpsertArticle(ctx context.Context, a models.NewsArticle) (models.NewsArticle, error) {
 	meta, _ := json.Marshal(a.Metadata)
 	if a.Metadata == nil {
@@ -246,13 +263,43 @@ func (s *PipelineStore) ListArticlesForSymbols(ctx context.Context, symbols []st
 		return nil, err
 	}
 
+	symbolSet := make(map[string]bool, len(symbols))
+	for _, sym := range symbols {
+		symbolSet[strings.ToUpper(sym)] = true
+	}
 	for i := range articles {
 		syms, _ := s.GetArticleSymbols(ctx, articles[i].ID)
 		sent, _ := s.GetArticleSentiment(ctx, articles[i].ID)
-		articles[i].Symbols = syms
-		articles[i].Sentiment = sent
+		articles[i].Symbols = filterArticleSymbols(syms, symbolSet)
+		articles[i].Sentiment = filterArticleSentiment(sent, symbolSet)
 	}
 	return articles, nil
+}
+
+func filterArticleSymbols(syms []models.ArticleSymbol, allowed map[string]bool) []models.ArticleSymbol {
+	if len(syms) == 0 {
+		return syms
+	}
+	out := make([]models.ArticleSymbol, 0, len(syms))
+	for _, sym := range syms {
+		if allowed[strings.ToUpper(sym.Symbol)] {
+			out = append(out, sym)
+		}
+	}
+	return out
+}
+
+func filterArticleSentiment(sent []models.ArticleSentiment, allowed map[string]bool) []models.ArticleSentiment {
+	if len(sent) == 0 {
+		return sent
+	}
+	out := make([]models.ArticleSentiment, 0, len(sent))
+	for _, s := range sent {
+		if allowed[strings.ToUpper(s.Symbol)] {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 func (s *PipelineStore) UnmappedArticles(ctx context.Context, limit int) ([]models.NewsArticle, error) {
@@ -270,6 +317,50 @@ func (s *PipelineStore) UnmappedArticles(ctx context.Context, limit int) ([]mode
 		return nil, err
 	}
 	defer rows.Close()
+	var list []models.NewsArticle
+	for rows.Next() {
+		var a models.NewsArticle
+		var meta []byte
+		if err := rows.Scan(
+			&a.ID, &a.BacklogID, &a.Source, &a.URL, &a.CanonicalURL, &a.Title, &a.PublishedAt, &a.DiscoveredAt,
+			&a.FetchedAt, &a.RawText, &a.CleanedText, &a.Language, &a.TextHash, &meta, &a.CreatedAt, &a.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		_ = json.Unmarshal(meta, &a.Metadata)
+		list = append(list, a)
+	}
+	return list, rows.Err()
+}
+
+func (s *PipelineStore) ArticlesForSymbolRemap(ctx context.Context, limit int) ([]models.NewsArticle, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT a.id, a.backlog_id, a.source, a.url, a.canonical_url, a.title, a.published_at, a.discovered_at,
+			a.fetched_at, a.raw_text, a.cleaned_text, a.language, a.text_hash, a.metadata, a.created_at, a.updated_at
+		FROM news_articles a
+		WHERE length(a.cleaned_text) > 50
+			AND EXISTS (SELECT 1 FROM article_symbols s WHERE s.article_id = a.id)
+			AND (
+				(SELECT count(*) FROM article_symbols s WHERE s.article_id = a.id) > 2
+				OR NOT EXISTS (
+					SELECT 1 FROM article_symbols s
+					WHERE s.article_id = a.id
+						AND strpos(upper(a.title), '(' || s.symbol || ')') > 0
+				)
+			)
+		ORDER BY a.created_at DESC
+		LIMIT $1`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanNewsArticleRows(rows)
+}
+
+func scanNewsArticleRows(rows pgx.Rows) ([]models.NewsArticle, error) {
 	var list []models.NewsArticle
 	for rows.Next() {
 		var a models.NewsArticle
@@ -378,6 +469,11 @@ func (s *PipelineStore) UpsertSentiment(ctx context.Context, sent models.Article
 		sent.ArticleID, sent.Symbol, sent.SentimentLabel, sent.SentimentScore, sent.Confidence,
 		sent.ProbPositive, sent.ProbNegative, sent.ProbNeutral,
 		sent.ModelName, sent.ModelVersion, sent.InputMode)
+	return err
+}
+
+func (s *PipelineStore) DeleteSentimentForArticle(ctx context.Context, articleID string) error {
+	_, err := s.pool.Exec(ctx, `DELETE FROM article_sentiment WHERE article_id = $1`, articleID)
 	return err
 }
 

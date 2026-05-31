@@ -184,10 +184,20 @@ func (h PipelineInternalHandler) UnmappedArticles(w http.ResponseWriter, r *http
 
 func (h PipelineInternalHandler) MapArticleSymbols(w http.ResponseWriter, r *http.Request) {
 	limit := queryInt(r, "limit", 50)
-	articles, err := h.Store.UnmappedArticles(r.Context(), limit)
+	remap := r.URL.Query().Get("remap") == "true"
+	unmapped, err := h.Store.UnmappedArticles(r.Context(), limit)
 	if err != nil {
 		WriteError(w, http.StatusInternalServerError, "query failed")
 		return
+	}
+	articles := unmapped
+	if remap {
+		misMapped, err := h.Store.ArticlesForSymbolRemap(r.Context(), limit)
+		if err != nil {
+			WriteError(w, http.StatusInternalServerError, "query failed")
+			return
+		}
+		articles = mergeArticlesByID(unmapped, misMapped)
 	}
 	syms, err := h.Store.ActiveSymbols(r.Context())
 	if err != nil {
@@ -198,8 +208,13 @@ func (h PipelineInternalHandler) MapArticleSymbols(w http.ResponseWriter, r *htt
 	mapped := 0
 
 	for _, a := range articles {
-		guesses := []string{}
-		detected := services.DetectSymbols(a.CleanedText+" "+a.Title, universe, guesses)
+		guesses := services.GuessSymbolsFromTitle(a.Title)
+		if a.BacklogID != nil {
+			if backlog, berr := h.Store.GetBacklogByID(r.Context(), *a.BacklogID); berr == nil {
+				guesses = mergeSymbolGuesses(guesses, backlog.RawSymbolGuess)
+			}
+		}
+		detected := services.DetectSymbols(a.Title, a.CleanedText, universe, guesses)
 		var rows []models.ArticleSymbol
 		for _, d := range detected {
 			rows = append(rows, models.ArticleSymbol{
@@ -216,9 +231,41 @@ func (h PipelineInternalHandler) MapArticleSymbols(w http.ResponseWriter, r *htt
 		if err := h.Store.ReplaceArticleSymbols(r.Context(), a.ID, rows); err != nil {
 			continue
 		}
+		_ = h.Store.DeleteSentimentForArticle(r.Context(), a.ID)
 		mapped++
 	}
 	writeJSON(w, http.StatusOK, map[string]int{"mapped": mapped})
+}
+
+func mergeSymbolGuesses(primary, extra []string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, list := range [][]string{primary, extra} {
+		for _, g := range list {
+			sym := strings.ToUpper(strings.TrimSpace(g))
+			if sym == "" || seen[sym] {
+				continue
+			}
+			seen[sym] = true
+			out = append(out, sym)
+		}
+	}
+	return out
+}
+
+func mergeArticlesByID(primary, extra []models.NewsArticle) []models.NewsArticle {
+	seen := map[string]bool{}
+	out := make([]models.NewsArticle, 0, len(primary)+len(extra))
+	for _, list := range [][]models.NewsArticle{primary, extra} {
+		for _, a := range list {
+			if seen[a.ID] {
+				continue
+			}
+			seen[a.ID] = true
+			out = append(out, a)
+		}
+	}
+	return out
 }
 
 func (h PipelineInternalHandler) SetArticleSymbols(w http.ResponseWriter, r *http.Request) {
@@ -607,14 +654,16 @@ func (h PipelineInternalHandler) IngestRSS(w http.ResponseWriter, r *http.Reques
 				pub = &t
 			}
 		}
+		title := strings.TrimSpace(item.Title)
 		_, err := h.Store.UpsertBacklog(r.Context(), models.NewsBacklogItem{
-			Source:       req.Source,
-			URL:          item.Link,
-			CanonicalURL: services.CanonicalURL(item.Link),
-			Title:        strings.TrimSpace(item.Title),
-			PublishedAt:  pub,
-			DiscoveredAt: time.Now().UTC(),
-			Metadata:     map[string]any{"rss": true},
+			Source:         req.Source,
+			URL:            item.Link,
+			CanonicalURL:   services.CanonicalURL(item.Link),
+			Title:          title,
+			PublishedAt:    pub,
+			DiscoveredAt:   time.Now().UTC(),
+			RawSymbolGuess: services.GuessSymbolsFromTitle(title),
+			Metadata:       map[string]any{"rss": true},
 		})
 		if err == nil {
 			upserted++
