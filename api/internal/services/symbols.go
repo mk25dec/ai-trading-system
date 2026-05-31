@@ -1,64 +1,23 @@
 package services
 
 import (
-	"regexp"
 	"strings"
 )
 
-var titleParenRe = regexp.MustCompile(`\(([A-Z]{1,5})\)`)
-
-// ambiguousWords are uppercase tokens that are not tickers in context.
+// ambiguousWords are tokens sources sometimes mislabel as tickers.
 var ambiguousWords = map[string]bool{
 	"AI": true, "US": true, "UK": true, "EU": true, "CEO": true, "CFO": true,
 	"IPO": true, "ETF": true, "GDP": true, "FED": true, "SEC": true,
 }
 
-func DetectSymbols(title, body string, universe map[string]bool, guesses []string) []DetectedSymbol {
-	_ = body // article text is not used for symbol assignment
-	found := map[string]DetectedSymbol{}
-
-	add := func(sym, method string, score, conf float64) {
-		sym = strings.ToUpper(strings.TrimSpace(sym))
-		if sym == "" || ambiguousWords[sym] {
-			return
-		}
-		if method != "title_paren" && method != "source_metadata" && !universe[sym] {
-			return
-		}
-		if existing, ok := found[sym]; ok && existing.RelevanceScore >= score {
-			return
-		}
-		found[sym] = DetectedSymbol{Symbol: sym, DetectionMethod: method, RelevanceScore: score, Confidence: conf}
-	}
-
-	for _, g := range guesses {
-		sym := strings.ToUpper(strings.TrimSpace(g))
-		if sym != "" {
-			add(sym, "source_metadata", 0.95, 0.95)
-		}
-	}
-
-	// Only source metadata and explicit (TICKER) in the headline — never infer from body or fuzzy title matches.
-	for _, d := range extractTickersFromTitle(title) {
-		add(d.Symbol, d.DetectionMethod, d.RelevanceScore, d.Confidence)
-	}
-
-	return detectedList(found)
-}
-
-func extractTickersFromTitle(title string) []DetectedSymbol {
-	upper := strings.ToUpper(title)
-	seen := map[string]bool{}
-	var out []DetectedSymbol
-	for _, m := range titleParenRe.FindAllStringSubmatch(upper, -1) {
-		sym := m[1]
-		if seen[sym] || ambiguousWords[sym] {
-			continue
-		}
-		seen[sym] = true
+// SymbolsFromSource maps only tickers supplied by the ingest source (backlog / metadata).
+func SymbolsFromSource(raw []string) []DetectedSymbol {
+	tickers := NormalizeSourceTickers(raw)
+	out := make([]DetectedSymbol, 0, len(tickers))
+	for _, sym := range tickers {
 		out = append(out, DetectedSymbol{
 			Symbol:          sym,
-			DetectionMethod: "title_paren",
+			DetectionMethod: "source_metadata",
 			RelevanceScore:  0.95,
 			Confidence:      0.95,
 		})
@@ -66,28 +25,48 @@ func extractTickersFromTitle(title string) []DetectedSymbol {
 	return out
 }
 
-func detectedList(found map[string]DetectedSymbol) []DetectedSymbol {
-	out := make([]DetectedSymbol, 0, len(found))
-	for _, d := range found {
-		out = append(out, d)
-	}
-	return out
-}
-
-// GuessSymbolsFromTitle extracts tickers for RSS backlog hints (no universe filter).
-func GuessSymbolsFromTitle(title string) []string {
-	upper := strings.ToUpper(title)
+// NormalizeSourceTickers deduplicates and uppercases source-provided tickers.
+func NormalizeSourceTickers(raw []string) []string {
 	seen := map[string]bool{}
 	var out []string
-	for _, m := range titleParenRe.FindAllStringSubmatch(upper, -1) {
-		sym := m[1]
-		if seen[sym] || ambiguousWords[sym] {
+	for _, g := range raw {
+		sym := strings.ToUpper(strings.TrimSpace(g))
+		if sym == "" || ambiguousWords[sym] || seen[sym] {
 			continue
 		}
 		seen[sym] = true
 		out = append(out, sym)
 	}
 	return out
+}
+
+// SourceTickersFromMetadata reads optional ticker lists from ingest metadata.
+func SourceTickersFromMetadata(meta map[string]any) []string {
+	if meta == nil {
+		return nil
+	}
+	var out []string
+	for _, key := range []string{"symbols", "tickers", "rawSymbolGuess", "raw_symbol_guess"} {
+		out = append(out, parseTickerList(meta[key])...)
+	}
+	return NormalizeSourceTickers(out)
+}
+
+func parseTickerList(v any) []string {
+	switch t := v.(type) {
+	case []string:
+		return t
+	case []any:
+		var out []string
+		for _, item := range t {
+			if s, ok := item.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return out
+	default:
+		return nil
+	}
 }
 
 type DetectedSymbol struct {

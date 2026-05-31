@@ -180,9 +180,14 @@ func (s *PipelineStore) ListArticlesForSymbols(ctx context.Context, symbols []st
 		WHERE EXISTS (
 			SELECT 1 FROM article_symbols s WHERE s.article_id = a.id AND s.symbol = ANY($2)
 		)
-		OR EXISTS (
-			SELECT 1 FROM unnest($2::text[]) AS wl(sym)
-			WHERE strpos(upper(a.title), '(' || upper(wl.sym) || ')') > 0
+		OR (
+			a.backlog_id IS NOT NULL
+			AND EXISTS (
+				SELECT 1
+				FROM news_backlog b,
+				LATERAL jsonb_array_elements_text(COALESCE(b.raw_symbol_guess, '[]'::jsonb)) AS elem
+				WHERE b.id = a.backlog_id AND upper(elem) = ANY($2)
+			)
 		)
 		ORDER BY a.published_at DESC NULLS LAST, a.created_at DESC LIMIT $1`, limit, symbols)
 	if err != nil {
@@ -257,14 +262,6 @@ func (s *PipelineStore) ArticlesForSymbolRemap(ctx context.Context, limit int) (
 		FROM news_articles a
 		WHERE length(a.cleaned_text) > 50
 			AND EXISTS (SELECT 1 FROM article_symbols s WHERE s.article_id = a.id)
-			AND (
-				(SELECT count(*) FROM article_symbols s WHERE s.article_id = a.id) > 2
-				OR NOT EXISTS (
-					SELECT 1 FROM article_symbols s
-					WHERE s.article_id = a.id
-						AND strpos(upper(a.title), '(' || s.symbol || ')') > 0
-				)
-			)
 		ORDER BY a.created_at DESC
 		LIMIT $1`, limit)
 	if err != nil {
@@ -934,6 +931,32 @@ func (s *PipelineStore) SymbolName(ctx context.Context, symbol string) (string, 
 }
 
 // SymbolMeta returns catalog name, exchange, and asset class for a ticker.
+// MatchSymbolByCompanyName returns a ticker from universe whose catalog name matches the phrase.
+func (s *PipelineStore) MatchSymbolByCompanyName(ctx context.Context, companyPhrase string, universe []string) (string, bool) {
+	phrase := strings.TrimSpace(companyPhrase)
+	if phrase == "" || len(universe) == 0 {
+		return "", false
+	}
+	var sym string
+	err := s.pool.QueryRow(ctx, `
+		SELECT symbol FROM symbols
+		WHERE symbol = ANY($1)
+		  AND is_active
+		  AND TRIM(name) <> ''
+		  AND (
+		    UPPER(TRIM(name)) = UPPER($2)
+		    OR UPPER(name) LIKE '%' || UPPER($2) || '%'
+		  )
+		ORDER BY
+		  CASE WHEN UPPER(TRIM(name)) = UPPER($2) THEN 0 ELSE 1 END,
+		  length(name) ASC
+		LIMIT 1`, universe, phrase).Scan(&sym)
+	if err != nil {
+		return "", false
+	}
+	return strings.ToUpper(sym), true
+}
+
 func (s *PipelineStore) SymbolMeta(ctx context.Context, symbol string) (name string, exchange *string, assetClass string, err error) {
 	var ex *string
 	var class string

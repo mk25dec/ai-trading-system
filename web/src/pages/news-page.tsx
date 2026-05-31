@@ -15,18 +15,13 @@ import { formatDateTime, useWorkspace } from "@/hooks/use-workspace"
 import { pipelineApi, type ArticleSentiment, type ArticleWithDetails } from "@/lib/pipeline-api"
 
 function articleDisplaySymbols(article: ArticleWithDetails): string[] {
-  if ((article.titleSymbols ?? []).length > 0) {
-    return article.titleSymbols ?? []
-  }
-  return (article.symbols ?? []).map((s) => s.symbol)
+  return article.titleSymbols ?? []
 }
 
 function articleDisplaySentiment(article: ArticleWithDetails): ArticleSentiment[] {
   const symbols = articleDisplaySymbols(article)
-  const all = article.sentiment ?? []
-  if (symbols.length === 0) return all
-  const matched = all.filter((s) => symbols.includes(s.symbol))
-  return matched.length > 0 ? matched : all
+  if (symbols.length === 0) return []
+  return (article.sentiment ?? []).filter((s) => symbols.includes(s.symbol))
 }
 
 export function NewsPage() {
@@ -87,7 +82,7 @@ export function NewsPage() {
                   <TableHead>Pulled</TableHead>
                   <TableHead>Title</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Guesses</TableHead>
+                  <TableHead>Source tickers</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -145,7 +140,7 @@ export function NewsPage() {
                   <TableHead>Pulled</TableHead>
                   <TableHead>Source</TableHead>
                   <TableHead>Title</TableHead>
-                  <TableHead>Symbols</TableHead>
+                  <TableHead>Source tickers</TableHead>
                   <TableHead>Sentiment</TableHead>
                 </TableRow>
               </TableHeader>

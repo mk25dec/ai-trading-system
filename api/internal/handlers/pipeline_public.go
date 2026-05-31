@@ -190,9 +190,44 @@ func (h PipelinePublicHandler) ListWorkspaceArticles(w http.ResponseWriter, r *h
 		items = []models.ArticleWithDetails{}
 	}
 	for i := range items {
-		items[i].TitleSymbols = services.GuessSymbolsFromTitle(items[i].Title)
+		src, err := services.SourceTickersForArticle(r.Context(), h.Store, items[i].NewsArticle)
+		if err != nil {
+			WriteError(w, http.StatusInternalServerError, "source tickers failed")
+			return
+		}
+		items[i].TitleSymbols = src
+		items[i].Symbols = filterArticleSymbolsByTickers(items[i].Symbols, src)
+		items[i].Sentiment = filterArticleSentimentByTickers(items[i].Sentiment, src)
 	}
 	writeJSON(w, http.StatusOK, items)
+}
+
+func filterArticleSymbolsByTickers(syms []models.ArticleSymbol, allowed []string) []models.ArticleSymbol {
+	if len(allowed) == 0 {
+		return []models.ArticleSymbol{}
+	}
+	set := services.UniverseSet(allowed)
+	out := make([]models.ArticleSymbol, 0, len(allowed))
+	for _, s := range syms {
+		if set[strings.ToUpper(s.Symbol)] {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+func filterArticleSentimentByTickers(sent []models.ArticleSentiment, allowed []string) []models.ArticleSentiment {
+	if len(allowed) == 0 {
+		return []models.ArticleSentiment{}
+	}
+	set := services.UniverseSet(allowed)
+	out := make([]models.ArticleSentiment, 0, len(sent))
+	for _, s := range sent {
+		if set[strings.ToUpper(s.Symbol)] {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 func (h PipelinePublicHandler) ListWorkspaceSymbols(w http.ResponseWriter, r *http.Request) {

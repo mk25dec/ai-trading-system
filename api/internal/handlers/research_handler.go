@@ -191,6 +191,10 @@ func (h ResearchHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		_ = h.Store.UpsertMarketFeatures(r.Context(), *f)
 	}
 
+	if _, err := services.RemapArticleSymbols(r.Context(), h.Store, 200, true); err != nil {
+		errs = append(errs, "news symbol remap: "+err.Error())
+	}
+
 	result.SentimentRuns = h.runSentimentBatch(r.Context(), symbols, 80)
 	h.rebuildNewsFeatures(r.Context(), symbols, now)
 

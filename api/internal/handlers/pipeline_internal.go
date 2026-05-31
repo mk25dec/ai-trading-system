@@ -185,54 +185,10 @@ func (h PipelineInternalHandler) UnmappedArticles(w http.ResponseWriter, r *http
 func (h PipelineInternalHandler) MapArticleSymbols(w http.ResponseWriter, r *http.Request) {
 	limit := queryInt(r, "limit", 50)
 	remap := r.URL.Query().Get("remap") == "true"
-	unmapped, err := h.Store.UnmappedArticles(r.Context(), limit)
+	mapped, err := services.RemapArticleSymbols(r.Context(), h.Store, limit, remap)
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, "query failed")
+		WriteError(w, http.StatusInternalServerError, "map failed")
 		return
-	}
-	articles := unmapped
-	if remap {
-		misMapped, err := h.Store.ArticlesForSymbolRemap(r.Context(), limit)
-		if err != nil {
-			WriteError(w, http.StatusInternalServerError, "query failed")
-			return
-		}
-		articles = mergeArticlesByID(unmapped, misMapped)
-	}
-	syms, err := h.Store.ActiveSymbols(r.Context())
-	if err != nil {
-		WriteError(w, http.StatusInternalServerError, "symbols failed")
-		return
-	}
-	universe := services.UniverseSet(syms)
-	mapped := 0
-
-	for _, a := range articles {
-		guesses := services.GuessSymbolsFromTitle(a.Title)
-		if a.BacklogID != nil {
-			if backlog, berr := h.Store.GetBacklogByID(r.Context(), *a.BacklogID); berr == nil {
-				guesses = mergeSymbolGuesses(guesses, backlog.RawSymbolGuess)
-			}
-		}
-		detected := services.DetectSymbols(a.Title, a.CleanedText, universe, guesses)
-		var rows []models.ArticleSymbol
-		for _, d := range detected {
-			rows = append(rows, models.ArticleSymbol{
-				ArticleID:       a.ID,
-				Symbol:          d.Symbol,
-				RelevanceScore:  d.RelevanceScore,
-				DetectionMethod: d.DetectionMethod,
-				Confidence:      d.Confidence,
-			})
-		}
-		if len(rows) == 0 {
-			continue
-		}
-		if err := h.Store.ReplaceArticleSymbols(r.Context(), a.ID, rows); err != nil {
-			continue
-		}
-		_ = h.Store.DeleteSentimentForArticle(r.Context(), a.ID)
-		mapped++
 	}
 	writeJSON(w, http.StatusOK, map[string]int{"mapped": mapped})
 }
@@ -662,7 +618,7 @@ func (h PipelineInternalHandler) IngestRSS(w http.ResponseWriter, r *http.Reques
 			Title:          title,
 			PublishedAt:    pub,
 			DiscoveredAt:   time.Now().UTC(),
-			RawSymbolGuess: services.GuessSymbolsFromTitle(title),
+			RawSymbolGuess: nil,
 			Metadata:       map[string]any{"rss": true},
 		})
 		if err == nil {
