@@ -125,6 +125,10 @@ export function NewsPage() {
 
   const rawItems = (rawFeed.data ?? []).slice(0, 50)
   const backlogItems = (backlog.data ?? []).slice(0, 40)
+  const feedError =
+    rawFeed.isError || backlog.isError || articles.isError
+      ? [rawFeed.error, backlog.error, articles.error].find(Boolean)
+      : null
 
   return (
     <div className="space-y-8">
@@ -152,6 +156,12 @@ export function NewsPage() {
 
       {!workspaceId && (
         <p className="text-sm text-muted-foreground">Select a workspace to load news.</p>
+      )}
+
+      {feedError instanceof Error && (
+        <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          Failed to load news: {feedError.message}. Restart the API if you just deployed new routes.
+        </p>
       )}
 
       <section className="space-y-3">
@@ -195,7 +205,12 @@ export function NewsPage() {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-lg font-medium">Articles + sentiment</h2>
+        <div>
+          <h2 className="text-lg font-medium">Articles + sentiment</h2>
+          <p className="text-sm text-muted-foreground">
+            Latest fetched articles; tickers and sentiment use source-provided symbols only.
+          </p>
+        </div>
         <Card className="border-border/70 shadow-sm">
           <CardHeader className="pb-0">
             <CardTitle className="text-base">Latest processed articles</CardTitle>
@@ -262,7 +277,7 @@ export function NewsPage() {
                 {(articles.data ?? []).length === 0 && workspaceId && (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center text-muted-foreground">
-                      No articles mapped to your watchlist yet.
+                      No processed articles yet.
                     </TableCell>
                   </TableRow>
                 )}

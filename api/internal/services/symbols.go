@@ -1,8 +1,11 @@
 package services
 
 import (
+	"regexp"
 	"strings"
 )
+
+var titleParenRe = regexp.MustCompile(`\(([A-Z]{1,5})\)`)
 
 // ambiguousWords are tokens sources sometimes mislabel as tickers.
 var ambiguousWords = map[string]bool{
@@ -74,6 +77,23 @@ type DetectedSymbol struct {
 	DetectionMethod string
 	RelevanceScore  float64
 	Confidence      float64
+}
+
+// SourceTickersFromTitle returns tickers explicitly present in a source headline (e.g. "Foo (AAPL)").
+// Used at ingest only — not for body/title inference during mapping.
+func SourceTickersFromTitle(title string) []string {
+	upper := strings.ToUpper(title)
+	seen := map[string]bool{}
+	var out []string
+	for _, m := range titleParenRe.FindAllStringSubmatch(upper, -1) {
+		sym := m[1]
+		if seen[sym] || ambiguousWords[sym] {
+			continue
+		}
+		seen[sym] = true
+		out = append(out, sym)
+	}
+	return out
 }
 
 func UniverseSet(symbols []string) map[string]bool {

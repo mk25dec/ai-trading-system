@@ -34,6 +34,16 @@ func TestNormalizeSourceTickers_dedupesAndSkipsNoise(t *testing.T) {
 	}
 }
 
+func TestSourceTickersFromTitle_readsParenthesesFromHeadline(t *testing.T) {
+	got := SourceTickersFromTitle("Willis Lease Finance Corp. (WLFC) Surges")
+	if len(got) != 1 || got[0] != "WLFC" {
+		t.Fatalf("got %v, want WLFC from headline", got)
+	}
+	if len(SourceTickersFromTitle("Dave Ramsey mortgage tips")) != 0 {
+		t.Fatal("expected no tickers without parens in headline")
+	}
+}
+
 func TestSourceTickersFromMetadata_readsKnownKeys(t *testing.T) {
 	meta := map[string]any{
 		"symbols": []any{"MSFT", "AMD"},

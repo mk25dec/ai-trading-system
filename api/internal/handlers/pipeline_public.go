@@ -195,12 +195,7 @@ func (h PipelinePublicHandler) ListWorkspaceArticles(w http.ResponseWriter, r *h
 		WriteError(w, http.StatusForbidden, "access denied")
 		return
 	}
-	symbols, err := h.activeWatchlistSymbols(r.Context(), workspaceID)
-	if err != nil {
-		WriteError(w, http.StatusInternalServerError, "watchlist failed")
-		return
-	}
-	items, err := h.Store.ListArticlesForSymbols(r.Context(), symbols, 100)
+	items, err := h.Store.ListRecentArticles(r.Context(), 100)
 	if err != nil {
 		WriteError(w, http.StatusInternalServerError, "query failed")
 		return

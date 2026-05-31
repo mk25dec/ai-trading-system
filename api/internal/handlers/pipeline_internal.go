@@ -618,7 +618,7 @@ func (h PipelineInternalHandler) IngestRSS(w http.ResponseWriter, r *http.Reques
 			Title:          title,
 			PublishedAt:    pub,
 			DiscoveredAt:   time.Now().UTC(),
-			RawSymbolGuess: nil,
+			RawSymbolGuess: services.SourceTickersFromTitle(title),
 			Metadata:       map[string]any{"rss": true},
 		})
 		if err == nil {

@@ -2,7 +2,9 @@ package services
 
 import (
 	"context"
+	"errors"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/joeydekruis/ai-trading-system/api/internal/models"
 	"github.com/joeydekruis/ai-trading-system/api/internal/store"
 )
@@ -41,11 +43,12 @@ func SourceTickersForArticle(ctx context.Context, st *store.PipelineStore, a mod
 	var raw []string
 	if a.BacklogID != nil {
 		backlog, err := st.GetBacklogByID(ctx, *a.BacklogID)
-		if err != nil {
+		if err == nil {
+			raw = append(raw, backlog.RawSymbolGuess...)
+			raw = append(raw, SourceTickersFromMetadata(backlog.Metadata)...)
+		} else if !errors.Is(err, pgx.ErrNoRows) {
 			return nil, err
 		}
-		raw = append(raw, backlog.RawSymbolGuess...)
-		raw = append(raw, SourceTickersFromMetadata(backlog.Metadata)...)
 	}
 	raw = append(raw, SourceTickersFromMetadata(a.Metadata)...)
 	return NormalizeSourceTickers(raw), nil

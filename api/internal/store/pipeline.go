@@ -187,6 +187,48 @@ func (s *PipelineStore) ListBacklogForSymbols(ctx context.Context, symbols []str
 	return scanBacklogRows(rows)
 }
 
+func (s *PipelineStore) ListRecentArticles(ctx context.Context, limit int) ([]models.ArticleWithDetails, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 100
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT a.id, a.backlog_id, a.source, a.url, a.canonical_url, a.title, a.published_at, a.discovered_at, a.fetched_at,
+			a.raw_text, a.cleaned_text, a.language, a.text_hash, a.metadata, a.created_at, a.updated_at
+		FROM news_articles a
+		WHERE length(a.cleaned_text) > 50
+		ORDER BY a.published_at DESC NULLS LAST, a.created_at DESC
+		LIMIT $1`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var articles []models.ArticleWithDetails
+	for rows.Next() {
+		var a models.ArticleWithDetails
+		var meta []byte
+		if err := rows.Scan(
+			&a.ID, &a.BacklogID, &a.Source, &a.URL, &a.CanonicalURL, &a.Title, &a.PublishedAt, &a.DiscoveredAt,
+			&a.FetchedAt, &a.RawText, &a.CleanedText, &a.Language, &a.TextHash, &meta, &a.CreatedAt, &a.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		_ = json.Unmarshal(meta, &a.Metadata)
+		articles = append(articles, a)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	for i := range articles {
+		syms, _ := s.GetArticleSymbols(ctx, articles[i].ID)
+		sent, _ := s.GetArticleSentiment(ctx, articles[i].ID)
+		articles[i].Symbols = syms
+		articles[i].Sentiment = sent
+	}
+	return articles, nil
+}
+
 func (s *PipelineStore) ListArticlesForSymbols(ctx context.Context, symbols []string, limit int) ([]models.ArticleWithDetails, error) {
 	if len(symbols) == 0 {
 		return []models.ArticleWithDetails{}, nil
