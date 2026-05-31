@@ -176,6 +176,7 @@ export function ChartPage() {
             <div className="space-y-4">
               <ActualPredictedChart
                 points={series.data?.points ?? []}
+                forwardPoints={series.data?.forwardPoints ?? []}
                 symbol={symbol}
                 height={440}
                 onSelectionChange={setSelection}

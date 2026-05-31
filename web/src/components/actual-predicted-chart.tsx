@@ -24,12 +24,30 @@ function formatAxisLabel(ms: number): string {
   })
 }
 
-function buildOption(points: PriceChartPoint[], symbol: string): EChartsOption {
+function buildOption(
+  points: PriceChartPoint[],
+  forwardPoints: PriceChartPoint[],
+  symbol: string,
+): EChartsOption {
   const actual = points.map((p) => [parseTs(p.timestamp), p.close] as [number, number])
   const predicted = points.map(
     (p) => [parseTs(p.timestamp), p.predictedPrice1 ?? null] as [number, number | null],
   )
+  const anchorMs =
+    points.length > 0 ? parseTs(points[points.length - 1]!.timestamp) : 0
+  const forward: [number, number][] = []
+  if (points.length > 0 && forwardPoints.length > 0) {
+    const last = points[points.length - 1]!
+    forward.push([parseTs(last.timestamp), last.close])
+    for (const p of forwardPoints) {
+      forward.push([parseTs(p.timestamp), p.close])
+    }
+  }
   const singlePoint = points.length === 1
+  const legendItems = ["Live price", "Predicted (formula)"]
+  if (forward.length > 0) {
+    legendItems.push("Projected (+3D)")
+  }
 
   return {
     backgroundColor: "transparent",
@@ -64,7 +82,7 @@ function buildOption(points: PriceChartPoint[], symbol: string): EChartsOption {
     },
     legend: {
       top: 8,
-      data: ["Live price", "Predicted (formula)"],
+      data: legendItems,
       textStyle: { color: "#64748b", fontSize: 11 },
     },
     tooltip: {
@@ -92,7 +110,16 @@ function buildOption(points: PriceChartPoint[], symbol: string): EChartsOption {
       },
       formatter: (params: unknown) => {
         const items = Array.isArray(params) ? params : [params]
-        const first = items[0] as { dataIndex?: number }
+        const first = items[0] as { dataIndex?: number; seriesName?: string; value?: unknown }
+        if (first?.seriesName === "Projected (+3D)") {
+          const row = first.value as [number, number] | undefined
+          if (!row) return ""
+          const when = formatAxisLabel(row[0])
+          return [
+            `<div style="font-weight:600;margin-bottom:4px">${symbol} · ${when}</div>`,
+            `Projected: <b>$${row[1].toFixed(2)}</b>`,
+          ].join("<br/>")
+        }
         const idx = first?.dataIndex ?? 0
         const pt = points[idx]
         if (!pt) return ""
@@ -168,6 +195,36 @@ function buildOption(points: PriceChartPoint[], symbol: string): EChartsOption {
         itemStyle: { color: "#f59e0b" },
         connectNulls: false,
       },
+      ...(forward.length > 0
+        ? [
+            {
+              name: "Projected (+3D)",
+              type: "line" as const,
+              data: forward,
+              showSymbol: false,
+              smooth: 0.2,
+              lineStyle: { width: 2, type: "dashed" as const, color: "#8b5cf6" },
+              itemStyle: { color: "#8b5cf6" },
+              markLine: anchorMs
+                ? {
+                    symbol: ["none", "none"],
+                    silent: true,
+                    data: [
+                      {
+                        xAxis: anchorMs,
+                        label: {
+                          formatter: "Now",
+                          color: "#64748b",
+                          fontSize: 10,
+                        },
+                      },
+                    ],
+                    lineStyle: { color: "rgba(100,116,139,0.45)", type: "dotted" as const },
+                  }
+                : undefined,
+            },
+          ]
+        : []),
     ],
     title: {
       text: symbol,
@@ -184,6 +241,7 @@ type BrushEndEvent = {
 
 export function ActualPredictedChart({
   points,
+  forwardPoints = [],
   symbol,
   className,
   height = 420,
@@ -191,6 +249,7 @@ export function ActualPredictedChart({
   clearSelectionSignal = 0,
 }: {
   points: PriceChartPoint[]
+  forwardPoints?: PriceChartPoint[]
   symbol: string
   className?: string
   height?: number
@@ -259,7 +318,7 @@ export function ActualPredictedChart({
       chartRef.current = echarts.init(containerRef.current, undefined, { renderer: "canvas" })
       bindBrush(chartRef.current)
     }
-    chartRef.current.setOption(buildOption(points, symbol), {
+    chartRef.current.setOption(buildOption(points, forwardPoints, symbol), {
       notMerge: false,
       lazyUpdate: true,
     })
@@ -268,7 +327,7 @@ export function ActualPredictedChart({
     if (selectionRangeRef.current) {
       emitSelection(selectionRangeRef.current)
     }
-  }, [bindBrush, emitSelection, points, restoreBrush, symbol])
+  }, [bindBrush, emitSelection, forwardPoints, points, restoreBrush, symbol])
 
   useEffect(() => {
     render()
@@ -314,7 +373,8 @@ export function ActualPredictedChart({
       />
       <p className="text-xs text-muted-foreground">
         Drag on the chart (line-X brush in the toolbar) to select a time range — stats appear below.
-        Scroll or use the slider to zoom; double-click chart to reset zoom.
+        Purple dashed line is the formula projection for the next 3 days. Scroll or use the slider to
+        zoom; double-click chart to reset zoom.
       </p>
     </div>
   )

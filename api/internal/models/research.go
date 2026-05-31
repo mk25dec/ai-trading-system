@@ -58,11 +58,12 @@ type PriceChartPoint struct {
 }
 
 type PriceChartSeries struct {
-	Symbol       string            `json:"symbol"`
-	Timeframe    string            `json:"timeframe"`
-	Points       []PriceChartPoint `json:"points"`
-	RefreshedAt  *time.Time        `json:"refreshedAt,omitempty"`
-	LatestPrice  *float64          `json:"latestPrice,omitempty"`
+	Symbol        string            `json:"symbol"`
+	Timeframe     string            `json:"timeframe"`
+	Points        []PriceChartPoint `json:"points"`
+	ForwardPoints []PriceChartPoint `json:"forwardPoints,omitempty"`
+	RefreshedAt   *time.Time        `json:"refreshedAt,omitempty"`
+	LatestPrice   *float64          `json:"latestPrice,omitempty"`
 }
 
 type PriceChartSyncResult struct {

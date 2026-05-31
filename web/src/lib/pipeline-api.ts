@@ -300,6 +300,7 @@ export interface PriceChartSeries {
   symbol: string
   timeframe: string
   points: PriceChartPoint[]
+  forwardPoints?: PriceChartPoint[]
   refreshedAt?: string
   latestPrice?: number
 }

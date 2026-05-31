@@ -3,6 +3,7 @@ package services
 import (
 	"math"
 	"strings"
+	"time"
 
 	"github.com/joeydekruis/ai-trading-system/api/internal/models"
 )
@@ -18,6 +19,9 @@ const (
 	PriceProjectionIntradayMinBars = 60
 	// PriceProjectionIntradayHorizonDays one 1Min bar forward as fraction of a session day.
 	PriceProjectionIntradayHorizonDays = (1.0 / 60.0) / 6.5
+	// ChartForwardHorizonDays is calendar days of forward projection on the price chart.
+	ChartForwardHorizonDays = 3
+	chartForwardStepHours   = 2
 )
 
 // PredictedPrice1 computes the Sprint D center price for a forward horizon using the
@@ -235,4 +239,108 @@ func reverseCandles(in []models.MarketCandle) []models.MarketCandle {
 		out[i] = in[len(in)-1-i]
 	}
 	return out
+}
+
+type forwardHourAnchor struct {
+	hour  int
+	price float64
+}
+
+// BuildForwardChartPoints projects formula center prices for the next ChartForwardHorizonDays
+// (3 calendar days) from the anchor, using the 3D horizon score and daily feature context.
+func BuildForwardChartPoints(
+	anchorTime time.Time,
+	anchorPrice float64,
+	symbol string,
+	dailyAsc []models.MarketCandle,
+	nf *models.NewsFeatures,
+) []models.PriceChartPoint {
+	if anchorPrice <= 0 || anchorTime.IsZero() {
+		return nil
+	}
+
+	var vol float64 = 0.22
+	var rsi float64 = 50
+	var slopePerDay float64
+	shortScore := 50.0
+	fbEdge := finbertEdgeForProjection(nf)
+	meanRev := 0.0
+
+	if len(dailyAsc) >= PriceProjectionMinBars {
+		reversed := reverseCandles(dailyAsc)
+		mf := ComputeMarketFeatures(reversed, "1Day")
+		if mf != nil {
+			if mf.Volatility != nil {
+				vol = clampFloat(*mf.Volatility, 0.08, 0.85)
+			}
+			if mf.RSI != nil {
+				rsi = *mf.RSI
+			}
+		}
+		if rsi > 68 {
+			meanRev = -0.08
+		} else if rsi < 32 {
+			meanRev = 0.08
+		}
+		decision := ComputeDecision(symbol, mf, nf)
+		shortScore = horizonScoreFromDecision(decision, "short", decision.CompositeScore)
+		tail := make([]float64, 0, 20)
+		start := len(dailyAsc) - 20
+		if start < 0 {
+			start = 0
+		}
+		for j := start; j < len(dailyAsc); j++ {
+			tail = append(tail, dailyAsc[j].Close)
+		}
+		slopePerDay = linearSlopeGo(tail)
+	}
+
+	cp := CalibrationParamsActive()
+	hourAnchors := []forwardHourAnchor{{hour: 0, price: anchorPrice}}
+
+	for d := 1; d <= ChartForwardHorizonDays; d++ {
+		mu := expectedReturnPctGo(shortScore, float64(d), vol, slopePerDay, anchorPrice, fbEdge, cp.PUpsideFinbertWeight)
+		mu += meanRev * (float64(d) / 21.0)
+		hourAnchors = append(hourAnchors, forwardHourAnchor{
+			hour:  d * 24,
+			price: anchorPrice * (1 + mu/100),
+		})
+	}
+
+	maxHour := ChartForwardHorizonDays * 24
+	out := make([]models.PriceChartPoint, 0, maxHour/chartForwardStepHours)
+	for h := chartForwardStepHours; h <= maxHour; h += chartForwardStepHours {
+		price := lerpForwardPrice(hourAnchors, h)
+		out = append(out, models.PriceChartPoint{
+			Timestamp: anchorTime.Add(time.Duration(h) * time.Hour),
+			Close:     price,
+		})
+	}
+	return out
+}
+
+func lerpForwardPrice(anchors []forwardHourAnchor, hour int) float64 {
+	if len(anchors) == 0 {
+		return 0
+	}
+	if hour <= anchors[0].hour {
+		return anchors[0].price
+	}
+	last := anchors[len(anchors)-1]
+	if hour >= last.hour {
+		return last.price
+	}
+	for i := 1; i < len(anchors); i++ {
+		prev := anchors[i-1]
+		next := anchors[i]
+		if hour >= prev.hour && hour <= next.hour {
+			span := float64(next.hour - prev.hour)
+			if span == 0 {
+				return next.price
+			}
+			t := float64(hour-prev.hour) / span
+			return prev.price + (next.price-prev.price)*t
+		}
+	}
+	return last.price
 }

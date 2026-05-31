@@ -70,10 +70,30 @@ func (h PriceChartHandler) respondSeries(w http.ResponseWriter, r *http.Request,
 	}
 	points = services.MergeLiveChartPoint(points, tick)
 
+	anchorTime := time.Now().UTC()
+	anchorPrice := 0.0
+	if len(points) > 0 {
+		last := points[len(points)-1]
+		anchorTime = last.Timestamp
+		anchorPrice = last.Close
+	}
+	if tick != nil && tick.Price > 0 {
+		anchorTime = tick.Timestamp
+		anchorPrice = tick.Price
+	}
+
+	var forward []models.PriceChartPoint
+	if anchorPrice > 0 {
+		dailyAsc, _ := h.Store.CandlesForSymbolAsc(r.Context(), symbol, "1Day", 90)
+		nf, _ := h.Store.LatestNewsFeatures(r.Context(), symbol)
+		forward = services.BuildForwardChartPoints(anchorTime, anchorPrice, symbol, dailyAsc, nf)
+	}
+
 	series := models.PriceChartSeries{
-		Symbol:    symbol,
-		Timeframe: timeframe,
-		Points:    points,
+		Symbol:        symbol,
+		Timeframe:     timeframe,
+		Points:        points,
+		ForwardPoints: forward,
 	}
 	if tick != nil && tick.Price > 0 {
 		p := tick.Price
