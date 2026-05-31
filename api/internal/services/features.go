@@ -138,6 +138,19 @@ func meanInt64(values []int64) float64 {
 	return float64(sum) / float64(len(values))
 }
 
+// RebuildNewsFeaturesForSymbols aggregates article sentiment into news_features rows.
+func RebuildNewsFeaturesForSymbols(
+	upsert func(models.NewsFeatures) error,
+	symbols []string,
+	rows []SentimentRow,
+	now time.Time,
+) {
+	for _, sym := range symbols {
+		f := AggregateNewsFeatures(sym, rows, now)
+		_ = upsert(f)
+	}
+}
+
 func AggregateNewsFeatures(symbol string, rows []SentimentRow, now time.Time) models.NewsFeatures {
 	f := models.NewsFeatures{Symbol: symbol, Timestamp: now}
 	var scores1h, scores4h, scores24h []float64

@@ -157,7 +157,7 @@ func categoryTrend(mf *models.MarketFeatures) (float64, float64) {
 }
 
 func categorySentiment(nf *models.NewsFeatures) (float64, float64) {
-	if nf == nil {
+	if nf == nil || newsArticleCount(nf) == 0 {
 		return 0, 0
 	}
 	var scores []float64
@@ -211,8 +211,21 @@ func FinbertCategoryScore(nf *models.NewsFeatures) (score, confidence float64, o
 	return s, c, true
 }
 
-func categoryFinbert(nf *models.NewsFeatures) (float64, float64) {
+func newsArticleCount(nf *models.NewsFeatures) int {
 	if nf == nil {
+		return 0
+	}
+	if nf.NewsCount24h > 0 {
+		return nf.NewsCount24h
+	}
+	if nf.NewsCount4h > 0 {
+		return nf.NewsCount4h
+	}
+	return nf.NewsCount1h
+}
+
+func categoryFinbert(nf *models.NewsFeatures) (float64, float64) {
+	if nf == nil || newsArticleCount(nf) == 0 {
 		return 0, 0
 	}
 	fb := nf.Finbert

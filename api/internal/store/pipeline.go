@@ -339,16 +339,31 @@ type PendingSentimentRow struct {
 }
 
 func (s *PipelineStore) PendingSentiment(ctx context.Context, limit int) ([]PendingSentimentRow, error) {
+	return s.PendingSentimentForSymbols(ctx, limit, nil)
+}
+
+func (s *PipelineStore) PendingSentimentForSymbols(ctx context.Context, limit int, symbols []string) ([]PendingSentimentRow, error) {
 	if limit <= 0 {
 		limit = 50
 	}
-	rows, err := s.pool.Query(ctx, `
+	query := `
 		SELECT a.id, a.title, left(a.cleaned_text, 2000), s.symbol
 		FROM article_symbols s
 		JOIN news_articles a ON a.id = s.article_id
 		LEFT JOIN article_sentiment sent ON sent.article_id = s.article_id AND sent.symbol = s.symbol
-		WHERE sent.article_id IS NULL AND length(trim(a.cleaned_text)) > 0
-		ORDER BY a.created_at ASC LIMIT $1`, limit)
+		WHERE sent.article_id IS NULL AND length(trim(a.cleaned_text)) > 0`
+	args := []any{limit}
+	if len(symbols) > 0 {
+		query += `
+		ORDER BY CASE WHEN s.symbol = ANY($2::text[]) THEN 0 ELSE 1 END,
+			a.published_at DESC NULLS LAST,
+			a.created_at ASC LIMIT $1`
+		args = []any{limit, symbols}
+	} else {
+		query += `
+		ORDER BY a.published_at DESC NULLS LAST, a.created_at ASC LIMIT $1`
+	}
+	rows, err := s.pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

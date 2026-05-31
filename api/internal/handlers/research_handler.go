@@ -178,7 +178,6 @@ func (h ResearchHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now().UTC()
-	sentRows, _ := h.Store.SentimentRowsSince(r.Context(), now.Add(-24*time.Hour))
 
 	for _, sym := range symbols {
 		candles, err := h.Store.CandlesForSymbol(r.Context(), sym, "1Day", 90)
@@ -192,13 +191,8 @@ func (h ResearchHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		_ = h.Store.UpsertMarketFeatures(r.Context(), *f)
 	}
 
-	allSent := services.SentimentRowsFromDetails(sentRows)
-	for _, sym := range symbols {
-		f := services.AggregateNewsFeatures(sym, allSent, now)
-		_ = h.Store.UpsertNewsFeatures(r.Context(), f)
-	}
-
-	result.SentimentRuns = h.runSentimentBatch(r.Context(), 40)
+	result.SentimentRuns = h.runSentimentBatch(r.Context(), symbols, 80)
+	h.rebuildNewsFeatures(r.Context(), symbols, now)
 
 	for _, sym := range symbols {
 		mf, _ := h.Store.LatestMarketFeatures(r.Context(), sym)
@@ -332,11 +326,22 @@ func (h ResearchHandler) generateSignals(ctx context.Context, workspaceID string
 	return signals, nil
 }
 
-func (h ResearchHandler) runSentimentBatch(ctx context.Context, limit int) int {
+func (h ResearchHandler) rebuildNewsFeatures(ctx context.Context, symbols []string, now time.Time) {
+	sentRows, _ := h.Store.SentimentRowsSince(ctx, now.Add(-24*time.Hour))
+	allSent := services.SentimentRowsFromDetails(sentRows)
+	services.RebuildNewsFeaturesForSymbols(
+		func(f models.NewsFeatures) error { return h.Store.UpsertNewsFeatures(ctx, f) },
+		symbols,
+		allSent,
+		now,
+	)
+}
+
+func (h ResearchHandler) runSentimentBatch(ctx context.Context, watchlist []string, limit int) int {
 	if h.Finbert == nil {
 		return 0
 	}
-	pending, err := h.Store.PendingSentiment(ctx, limit)
+	pending, err := h.Store.PendingSentimentForSymbols(ctx, limit, watchlist)
 	if err != nil {
 		return 0
 	}

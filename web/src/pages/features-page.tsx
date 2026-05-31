@@ -35,7 +35,7 @@ import {
   summarizeRows,
   type FeatureRow,
 } from "@/lib/feature-metrics"
-import { buildTraderKpis, finbertForRow } from "@/lib/decision-engine"
+import { buildTraderKpis, finbertForRow, hasNewsCoverage } from "@/lib/decision-engine"
 import {
   pipelineApi,
   type FinbertMetrics,
@@ -345,9 +345,26 @@ function FeatureDetailMetrics({ row }: { row: FeatureRow }) {
         <Metric label="Volatility (10d)" value={formatNum(m?.volatility, 3)} />
       </MetricBlock>
       <MetricBlock title="News rollups">
-        <Metric label="Articles 1h / 4h / 24h" value={`${n?.newsCount1h ?? 0} / ${n?.newsCount4h ?? 0} / ${n?.newsCount24h ?? 0}`} />
-        <Metric label="Signed sentiment 1h / 24h" value={`${formatSentiment(n?.avgSentiment1h)} / ${formatSentiment(n?.avgSentiment24h)}`} />
-        <Metric label="Momentum (4h−24h)" value={formatSentiment(n?.sentimentMomentum)} />
+        <Metric
+          label="Articles 1h / 4h / 24h"
+          value={
+            hasNewsCoverage(n)
+              ? `${n?.newsCount1h ?? 0} / ${n?.newsCount4h ?? 0} / ${n?.newsCount24h ?? 0}`
+              : "—"
+          }
+        />
+        <Metric
+          label="Signed sentiment 1h / 24h"
+          value={
+            hasNewsCoverage(n)
+              ? `${formatSentiment(n?.avgSentiment1h)} / ${formatSentiment(n?.avgSentiment24h)}`
+              : "—"
+          }
+        />
+        <Metric
+          label="Momentum (4h−24h)"
+          value={hasNewsCoverage(n) ? formatSentiment(n?.sentimentMomentum) : "—"}
+        />
         <Metric
           label="Max relevance 24h"
           value={n?.maxRelevanceScore24h != null ? n.maxRelevanceScore24h.toFixed(2) : "—"}
@@ -403,16 +420,20 @@ function FeatureTableRow({ row }: { row: FeatureRow }) {
         <TableCell className={cn("text-right font-mono tabular-nums", pctClass(m?.distanceSma20))}>
           {formatPct(m?.distanceSma20 != null ? m.distanceSma20 * 100 : null)}
         </TableCell>
-        <TableCell className="text-right font-mono tabular-nums">{n?.newsCount1h ?? "—"}</TableCell>
-        <TableCell className="text-right font-mono tabular-nums">{n?.newsCount24h ?? "—"}</TableCell>
+        <TableCell className="text-right font-mono tabular-nums">
+          {hasNewsCoverage(n) ? n?.newsCount1h : "—"}
+        </TableCell>
+        <TableCell className="text-right font-mono tabular-nums">
+          {hasNewsCoverage(n) ? n?.newsCount24h : "—"}
+        </TableCell>
         <TableCell className={cn("text-right font-mono tabular-nums", sentimentClass(n?.avgSentiment1h))}>
-          {formatSentiment(n?.avgSentiment1h)}
+          {hasNewsCoverage(n) ? formatSentiment(n?.avgSentiment1h) : "—"}
         </TableCell>
         <TableCell className={cn("text-right font-mono tabular-nums", sentimentClass(n?.avgSentiment24h))}>
-          {formatSentiment(n?.avgSentiment24h)}
+          {hasNewsCoverage(n) ? formatSentiment(n?.avgSentiment24h) : "—"}
         </TableCell>
         <TableCell className={cn("text-right font-mono tabular-nums", sentimentClass(n?.sentimentMomentum))}>
-          {formatSentiment(n?.sentimentMomentum)}
+          {hasNewsCoverage(n) ? formatSentiment(n?.sentimentMomentum) : "—"}
         </TableCell>
         <TableCell>
           <div className="flex flex-wrap gap-1">

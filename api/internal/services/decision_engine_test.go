@@ -65,6 +65,26 @@ func TestComputeDecision_conflictPriceVsNews(t *testing.T) {
 	}
 }
 
+func TestCategoryFinbert_requiresRecentArticles(t *testing.T) {
+	pos, neg := 0.6, 0.2
+	nf := &models.NewsFeatures{
+		Finbert: models.FinbertMetrics{
+			PositiveLabelPct24h: &pos,
+			NegativeLabelPct24h: &neg,
+		},
+	}
+	score, conf := categoryFinbert(nf)
+	if score != 0 || conf != 0 {
+		t.Fatalf("expected no finbert category without articles, got score=%v conf=%v", score, conf)
+	}
+
+	nf.NewsCount24h = 3
+	score, conf = categoryFinbert(nf)
+	if conf <= 0 {
+		t.Fatalf("expected finbert category with articles, got score=%v conf=%v", score, conf)
+	}
+}
+
 func TestNewsStance_labelPctOnly(t *testing.T) {
 	pos, neg := 0.55, 0.25
 	nf := &models.NewsFeatures{

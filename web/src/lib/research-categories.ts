@@ -1,5 +1,5 @@
-import type { CategoryScore, DecisionView, HorizonOutlook, ResearchStockRow } from "@/lib/pipeline-api"
-import { resolveDecision } from "@/lib/decision-engine"
+import type { CategoryScore, DecisionView, HorizonOutlook, NewsFeatures, ResearchStockRow } from "@/lib/pipeline-api"
+import { hasNewsCoverage, resolveDecision } from "@/lib/decision-engine"
 
 /** v2 baseline categories from my-research.md — Calculation rules · Category weights */
 export interface ResearchCategoryDef {
@@ -234,6 +234,7 @@ function clamp(v: number, lo: number, hi: number): number {
 export function resolveCategoryCell(
   def: ResearchCategoryDef,
   decision: DecisionView,
+  news?: NewsFeatures | null,
 ): CategoryCell {
   const empty: CategoryCell = {
     score: null,
@@ -243,6 +244,10 @@ export function resolveCategoryCell(
   }
 
   if (!def.implemented) {
+    return empty
+  }
+
+  if (def.id === "sentiment" && !hasNewsCoverage(news)) {
     return empty
   }
 
@@ -364,7 +369,7 @@ export function buildStockCategoryBreakdown(row: ResearchStockRow): StockCategor
   const cells: Record<string, CategoryCell> = {}
 
   for (const def of RESEARCH_CATEGORIES) {
-    cells[def.id] = resolveCategoryCell(def, decision)
+    cells[def.id] = resolveCategoryCell(def, decision, row.news)
   }
 
   const formula = buildCompositeFormula(decision)

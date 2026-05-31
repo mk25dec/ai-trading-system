@@ -1,6 +1,7 @@
 import type {
   DecisionView,
   FinbertMetrics,
+  NewsFeatures,
   ResearchStockRow,
 } from "@/lib/pipeline-api"
 
@@ -31,10 +32,26 @@ function unavailableDecision(): DecisionView {
   }
 }
 
+export function hasNewsCoverage(news?: NewsFeatures | null): boolean {
+  if (!news) return false
+  return (news.newsCount1h ?? 0) > 0 || (news.newsCount4h ?? 0) > 0 || (news.newsCount24h ?? 0) > 0
+}
+
+function finbertHasMetrics(fb: FinbertMetrics): boolean {
+  return (
+    fb.avgProbPositive24h != null ||
+    fb.avgProbNegative24h != null ||
+    fb.weightedSentiment24h != null ||
+    fb.positiveLabelPct24h != null ||
+    fb.avgProbPositive1h != null ||
+    fb.avgProbPositive4h != null
+  )
+}
+
 export function finbertForRow(row: ResearchStockRow): FinbertMetrics | undefined {
   const nested = row.news?.finbert
-  if (nested && Object.keys(nested).length > 0) return nested
-  return undefined
+  if (!nested || !finbertHasMetrics(nested)) return undefined
+  return nested
 }
 
 export function outlookToLabel(outlook: string): string {
