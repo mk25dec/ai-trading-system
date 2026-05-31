@@ -44,14 +44,25 @@ func TestDetectSymbols_usesSourceGuesses(t *testing.T) {
 	}
 }
 
-func TestDetectSymbols_skipsSingleLetterBodyMatches(t *testing.T) {
-	universe := UniverseSet([]string{"A", "NVDA"})
-	title := "Market update for investors"
-	body := "A broad rally lifted shares while NVIDIA climbed."
+func TestDetectSymbols_ignoresBodyWithoutSourceOrTitleTicker(t *testing.T) {
+	universe := UniverseSet([]string{"A", "NVDA", "AMD", "AAPL", "MSFT", "AMZN", "IBM"})
+	title := "Dave Ramsey Says To Pay Off Your Mortgage Early — But Should You?"
+	body := "NVIDIA and Microsoft led the market higher while Apple, AMD, Amazon, and IBM gained."
 
 	got := DetectSymbols(title, body, universe, nil)
-	if len(got) != 1 || got[0].Symbol != "NVDA" {
-		t.Fatalf("got %+v, want only NVDA from company alias/body", got)
+	if len(got) != 0 {
+		t.Fatalf("got %+v, want no symbols when source and title lack tickers", got)
+	}
+}
+
+func TestDetectSymbols_ignoresFuzzyTitleWithoutParenTicker(t *testing.T) {
+	universe := UniverseSet([]string{"AAPL"})
+	title := "Apple reports record revenue"
+	body := ""
+
+	got := DetectSymbols(title, body, universe, nil)
+	if len(got) != 0 {
+		t.Fatalf("got %+v, want empty without (TICKER) or source guess", got)
 	}
 }
 

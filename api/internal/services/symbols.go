@@ -5,19 +5,7 @@ import (
 	"strings"
 )
 
-var (
-	tickerRe     = regexp.MustCompile(`\b([A-Z]{1,5})\b`)
-	titleParenRe = regexp.MustCompile(`\(([A-Z]{1,5})\)`)
-)
-
-// companyAliases maps common names to tickers in our universe.
-var companyAliases = map[string]string{
-	"NVIDIA": "NVDA", "MICROSOFT": "MSFT", "APPLE": "AAPL", "AMAZON": "AMZN",
-	"META": "META", "ALPHABET": "GOOGL", "GOOGLE": "GOOGL", "AMD": "AMD",
-	"TAIWAN SEMICONDUCTOR": "TSM", "BROADCOM": "AVGO", "ASML": "ASML",
-	"PALANTIR": "PLTR", "SNOWFLAKE": "SNOW", "CROWDSTRIKE": "CRWD",
-	"ARM HOLDINGS": "ARM", "SUPER MICRO": "SMCI",
-}
+var titleParenRe = regexp.MustCompile(`\(([A-Z]{1,5})\)`)
 
 // ambiguousWords are uppercase tokens that are not tickers in context.
 var ambiguousWords = map[string]bool{
@@ -26,6 +14,7 @@ var ambiguousWords = map[string]bool{
 }
 
 func DetectSymbols(title, body string, universe map[string]bool, guesses []string) []DetectedSymbol {
+	_ = body // article text is not used for symbol assignment
 	found := map[string]DetectedSymbol{}
 
 	add := func(sym, method string, score, conf float64) {
@@ -49,51 +38,9 @@ func DetectSymbols(title, body string, universe map[string]bool, guesses []strin
 		}
 	}
 
-	titleParen := extractTickersFromTitle(title)
-	for _, d := range titleParen {
+	// Only source metadata and explicit (TICKER) in the headline — never infer from body or fuzzy title matches.
+	for _, d := range extractTickersFromTitle(title) {
 		add(d.Symbol, d.DetectionMethod, d.RelevanceScore, d.Confidence)
-	}
-
-	// Parenthesized tickers in the headline are authoritative — skip body noise.
-	if len(titleParen) > 0 {
-		return detectedList(found)
-	}
-
-	titleUpper := strings.ToUpper(title)
-	for _, m := range tickerRe.FindAllStringSubmatch(titleUpper, -1) {
-		sym := m[1]
-		if len(sym) == 1 || ambiguousWords[sym] {
-			continue
-		}
-		add(sym, "title_ticker", 0.9, 0.85)
-	}
-
-	for name, sym := range companyAliases {
-		if strings.Contains(titleUpper, name) {
-			add(sym, "title_company", 0.85, 0.8)
-		}
-	}
-
-	if len(found) > 0 {
-		return detectedList(found)
-	}
-
-	bodyUpper := strings.ToUpper(body)
-	for _, m := range tickerRe.FindAllStringSubmatch(bodyUpper, -1) {
-		sym := m[1]
-		if len(sym) <= 1 || ambiguousWords[sym] {
-			continue
-		}
-		if sym == "ARM" && !strings.Contains(bodyUpper, "ARM HOLDINGS") {
-			continue
-		}
-		add(sym, "body_ticker", 0.65, 0.55)
-	}
-
-	for name, sym := range companyAliases {
-		if strings.Contains(bodyUpper, name) {
-			add(sym, "body_company", 0.6, 0.55)
-		}
 	}
 
 	return detectedList(found)
