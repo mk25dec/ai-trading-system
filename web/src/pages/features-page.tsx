@@ -5,7 +5,9 @@ import { AssetClassSection } from "@/components/asset-class-section"
 import { WorkspaceToolbar } from "@/components/workspace-toolbar"
 import { CategoryBreakdownTable } from "@/components/decision/category-breakdown-table"
 import { TraderKpiCards } from "@/components/decision/trader-kpi-cards"
-import { TraderOutlookTable } from "@/components/trader-outlook-table"
+import { TraderOutlookTable, DecisionDetailPanel } from "@/components/trader-outlook-table"
+import { ResearchRowDetail } from "@/pages/research-page"
+import { resolveDecision } from "@/lib/decision-engine"
 import { RecommendationBadge } from "@/components/recommendation-badge"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -151,7 +153,13 @@ export function FeaturesPage() {
             rows={section.items}
             expanded={expanded}
             onToggle={(sym) => setExpanded((s) => (s === sym ? null : sym))}
-            renderDetail={(row) => <FeaturesAnalystDetail row={row as FeatureRow} />}
+            renderDetail={(row) => (
+              <div className="space-y-4">
+                <DecisionDetailPanel row={row} decision={resolveDecision(row)} />
+                <ResearchRowDetail row={row} />
+                <FeaturesAnalystDetail row={row as FeatureRow} />
+              </div>
+            )}
           />
         </AssetClassSection>
       ))}

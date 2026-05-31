@@ -9,10 +9,12 @@ export function SignalOutlookChart({
   candles,
   forwardPoints,
   className,
+  showCaption = true,
 }: {
   candles: MarketCandle[]
   forwardPoints?: PriceChartPoint[]
   className?: string
+  showCaption?: boolean
 }) {
   const history = candles.slice(-21)
   const forward = (forwardPoints ?? []).slice(0, 4)
@@ -97,7 +99,9 @@ export function SignalOutlookChart({
           />
         )}
       </svg>
-      <p className="mt-0.5 text-center text-[9px] text-muted-foreground">Hist · proj (+3D)</p>
+      {showCaption ? (
+        <p className="mt-0.5 text-center text-[9px] text-muted-foreground">Hist · proj (+3D)</p>
+      ) : null}
     </div>
   )
 }

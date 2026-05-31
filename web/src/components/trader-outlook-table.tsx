@@ -2,7 +2,7 @@ import type { ReactNode } from "react"
 import { AlertTriangle, ChevronDown, ChevronRight, Newspaper } from "lucide-react"
 import { DecisionHeroPanel } from "@/components/decision/decision-hero-panel"
 import { MiniSparkline } from "@/components/decision/mini-sparkline"
-import { SignalOutlookChart } from "@/components/decision/signal-outlook-chart"
+import { SignalOutlookProjection } from "@/components/decision/signal-outlook-projection"
 import { ScoreGauge } from "@/components/decision/score-gauge"
 import { HorizonOutlookBadge } from "@/components/horizon-outlook-badge"
 import { RecommendationBadge } from "@/components/recommendation-badge"
@@ -128,7 +128,13 @@ function TraderOutlookRow({
           <RecommendationBadge action={action} />
           <p className="mt-1 text-[10px] font-medium text-muted-foreground">{signalSubline(d)}</p>
           <div className="mt-2" onClick={(e) => e.stopPropagation()}>
-            <SignalOutlookChart candles={row.candles ?? []} forwardPoints={row.forwardPoints} />
+            <SignalOutlookProjection
+              symbol={row.symbol}
+              name={row.name}
+              candles={row.candles ?? []}
+              forwardPoints={row.forwardPoints}
+              decision={d}
+            />
           </div>
         </TableCell>
         <TableCell className="text-right">
