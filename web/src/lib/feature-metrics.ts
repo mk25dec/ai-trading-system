@@ -92,16 +92,6 @@ export function snapshotBySymbol(snapshots: SymbolFeatureSnapshot[]) {
   return new Map(snapshots.map((s) => [s.symbol, s]))
 }
 
-export function numFromRecord(rec: Record<string, unknown>, key: string): number | undefined {
-  const v = rec[key]
-  if (typeof v === "number" && !Number.isNaN(v)) return v
-  return undefined
-}
-
-export function boolFromRecord(rec: Record<string, unknown>, key: string): boolean {
-  return rec[key] === true
-}
-
 export type FeatureRow = ResearchStockRow & {
   snapshot?: SymbolFeatureSnapshot
 }

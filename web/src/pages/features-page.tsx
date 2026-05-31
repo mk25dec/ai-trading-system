@@ -35,7 +35,7 @@ import {
   summarizeRows,
   type FeatureRow,
 } from "@/lib/feature-metrics"
-import { buildTraderKpis } from "@/lib/decision-engine"
+import { buildTraderKpis, finbertForRow } from "@/lib/decision-engine"
 import {
   pipelineApi,
   type FinbertMetrics,
@@ -330,7 +330,7 @@ function FeaturesAnalystDetail({ row }: { row: FeatureRow }) {
 function FeatureDetailMetrics({ row }: { row: FeatureRow }) {
   const m = row.market
   const n = row.news
-  const fb = finbertForRow(row)
+  const fb = finbertForFeatureRow(row)
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       <MetricBlock title="Market">
@@ -358,17 +358,14 @@ function FeatureDetailMetrics({ row }: { row: FeatureRow }) {
   )
 }
 
-function finbertForRow(row: FeatureRow): FinbertMetrics | undefined {
-  const nested = row.news?.finbert
-  if (nested && Object.keys(nested).length > 0) return nested
-  const snap = row.snapshot?.newsFeatures?.finbert as FinbertMetrics | undefined
-  return snap
+function finbertForFeatureRow(row: FeatureRow) {
+  return finbertForRow(row) ?? (row.snapshot?.newsFeatures?.finbert as FinbertMetrics | undefined)
 }
 
 function FeatureTableRow({ row }: { row: FeatureRow }) {
   const m = row.market
   const n = row.news
-  const fb = finbertForRow(row)
+  const fb = finbertForFeatureRow(row)
   const rsi = m?.rsi
   const rsiHint = rsiLabel(rsi)
 

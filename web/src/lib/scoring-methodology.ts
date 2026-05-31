@@ -101,7 +101,7 @@ export const SCORING_FORMULAS: FormulaEntry[] = [
       "P_T = P₀×(1+μ±σ√(days/252)); μ from horizon+FinBERT edge; P(up) includes FinBERT prior",
     period: "Anchors 3D·1W·2W·3W·1M (21d path); ±1σ shaded band",
     status: "implemented",
-    notes: "price-outlook.ts, finbert-edge.ts, ECharts band stack. Sprint D.",
+    notes: "api/internal/services/price_projection.go — chart page labels as formula projection.",
   },
   {
     id: "outlook_buckets",

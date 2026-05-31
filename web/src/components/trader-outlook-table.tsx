@@ -2,7 +2,6 @@ import type { ReactNode } from "react"
 import { AlertTriangle, ChevronDown, ChevronRight, Newspaper } from "lucide-react"
 import { DecisionHeroPanel } from "@/components/decision/decision-hero-panel"
 import { MiniSparkline } from "@/components/decision/mini-sparkline"
-import { PriceOutlookProjection } from "@/components/decision/price-outlook-projection"
 import { ScoreGauge } from "@/components/decision/score-gauge"
 import { HorizonOutlookBadge } from "@/components/horizon-outlook-badge"
 import { RecommendationBadge } from "@/components/recommendation-badge"
@@ -50,10 +49,6 @@ export function TraderOutlookTable({
             className="min-w-[220px]"
           />
           <TableColumnHeader guide={traderOutlookColumnGuides.chart} className="w-[72px]" />
-          <TableColumnHeader
-            guide={traderOutlookColumnGuides.priceOutlook}
-            className="min-w-[140px]"
-          />
           <TableColumnHeader guide={traderOutlookColumnGuides.signal} />
           <TableColumnHeader guide={traderOutlookColumnGuides.score} align="right" />
           <TableColumnHeader guide={traderOutlookColumnGuides.horizons} align="center" />
@@ -78,7 +73,7 @@ export function TraderOutlookTable({
         ))}
         {rows.length === 0 && emptyMessage && (
           <TableRow>
-            <TableCell colSpan={11} className="py-12 text-center text-muted-foreground">
+            <TableCell colSpan={10} className="py-12 text-center text-muted-foreground">
               {emptyMessage}
             </TableCell>
           </TableRow>
@@ -127,16 +122,6 @@ function TraderOutlookRow({
         </TableCell>
         <TableCell>
           <MiniSparkline candles={row.candles ?? []} />
-        </TableCell>
-        <TableCell onClick={(e) => e.stopPropagation()}>
-          <PriceOutlookProjection
-            symbol={row.symbol}
-            name={row.name}
-            candles={row.candles ?? []}
-            decision={d}
-            market={row.market}
-            news={row.news}
-          />
         </TableCell>
         <TableCell>
           <RecommendationBadge action={action} />

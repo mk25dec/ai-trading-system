@@ -160,20 +160,11 @@ export const RESEARCH_CATEGORIES: ResearchCategoryDef[] = [
     timeSensitivity: "Critical",
     keyInputs: "Cross-horizon agreement",
     modelsPlanned: "Meta engine",
-    dataSource: "Computed from 3D / 1W / 1M outlook agreement",
+    dataSource: "Shown via decision alignment badge — not a separate category score yet",
     backendIds: [],
-    implemented: true,
+    implemented: false,
   },
 ]
-
-export const COMPOSITE_FORMULA_DOC = {
-  research:
-    "FinalScore(T) = Σ (CategoryScoreᵢ × CategoryWeightᵢ × Confidenceᵢ) − RiskPenalty(T) + RegimeAdjustment(T)",
-  engine:
-    "Composite = 0.45×Score₁W + 0.30×Score₃D + 0.25×Score₁M + AlignmentBonus − RiskPenalty",
-  display:
-    "Cell score maps signed factor s ∈ [−1,+1] to display = (s+1)×50 (50 = neutral). Contribution = s × weight × confidence × 100.",
-}
 
 export interface CategoryCell {
   score: number | null
@@ -191,19 +182,6 @@ export interface StockCategoryBreakdown {
   unscored: boolean
   cells: Record<string, CategoryCell>
   formula: CompositeFormulaBreakdown
-}
-
-function alignmentScore(alignment: string): { score: number; confidence: number } {
-  switch (alignment) {
-    case "aligned_bullish":
-      return { score: 0.75, confidence: 0.85 }
-    case "aligned_bearish":
-      return { score: -0.75, confidence: 0.85 }
-    case "divergent":
-      return { score: -0.35, confidence: 0.7 }
-    default:
-      return { score: 0, confidence: 0.55 }
-  }
 }
 
 function mergeBackendScores(
@@ -266,17 +244,6 @@ export function resolveCategoryCell(
 
   if (!def.implemented) {
     return empty
-  }
-
-  if (def.id === "alignment") {
-    const { score, confidence } = alignmentScore(decision.alignment)
-    const contribution = score * def.researchWeight * confidence * 100
-    return {
-      score,
-      confidence,
-      contribution: Math.round(contribution * 10) / 10,
-      displayScore: signedToDisplay(score, confidence),
-    }
   }
 
   const byId = new Map((decision.categories ?? []).map((c) => [c.id, c]))

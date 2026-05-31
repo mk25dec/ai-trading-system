@@ -20,7 +20,6 @@ import { useWorkspace } from "@/hooks/use-workspace"
 import { useAuth } from "@/lib/auth"
 import { sortResearchRows } from "@/lib/feature-metrics"
 import {
-  aggregateSparkline,
   buildPerformanceSeries,
   buildPipelineHealth,
   confidenceBuckets,
@@ -83,11 +82,11 @@ export function OverviewPage() {
 
   const pipeline = useMemo(() => buildPipelineHealth(runs.data ?? []), [runs.data])
   const buckets = useMemo(() => confidenceBuckets(signals.data ?? []), [signals.data])
-  const sparkline = useMemo(() => aggregateSparkline(sortedRows), [sortedRows])
 
   const displayName = user?.name?.split(" ")[0] ?? user?.email ?? "there"
   const signalsHref = workspaceId ? `/workspaces/${workspaceId}/signals` : "/research"
-  const returnTone = kpis.avgReturn >= 0 ? "positive" : "negative"
+  const returnTone =
+    kpis.avgReturn != null ? (kpis.avgReturn >= 0 ? "positive" : "negative") : undefined
 
   return (
     <div className="space-y-6">
@@ -122,46 +121,45 @@ export function OverviewPage() {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
         <OverviewKpiCard
-          label="Portfolio value"
+          label="Watchlist notional"
           value={kpis.notional > 0 ? formatCurrency(kpis.notional) : "—"}
-          change={kpis.notional > 0 ? formatPctChange(kpis.avgReturn) : undefined}
+          change={kpis.avgReturn != null ? formatPctChange(kpis.avgReturn) : undefined}
           changeTone={returnTone}
-          hint="vs last 7 days · watchlist notional"
-          sparkline={sparkline}
+          hint="Sum of last closes · not a portfolio balance"
         />
         <OverviewKpiCard
-          label="Total return (7D)"
-          value={formatPctChange(kpis.avgReturn)}
+          label="Avg return (7D)"
+          value={kpis.avgReturn != null ? formatPctChange(kpis.avgReturn) : "—"}
           change={
-            kpis.notional > 0
+            kpis.notional > 0 && kpis.avgReturn != null
               ? `${kpis.returnUsd >= 0 ? "+" : "-"}${formatCurrency(Math.abs(kpis.returnUsd))}`
               : undefined
           }
           changeTone={returnTone}
-          hint="vs last 7 days"
+          hint="Mean 5d change across watchlist"
           icon={TrendingUp}
           iconClassName="bg-emerald-500/15 text-emerald-600"
         />
         <OverviewKpiCard
-          label="Win rate"
+          label="Buy bias share"
           value={kpis.winRate != null ? `${kpis.winRate.toFixed(1)}%` : "—"}
           hint={
             kpis.buyCount + kpis.sellCount > 0
-              ? `${kpis.buyCount} / ${kpis.buyCount + kpis.sellCount} buy bias`
+              ? `${kpis.buyCount} buy · ${kpis.sellCount} sell signals`
               : "No actionable signals"
           }
           icon={Activity}
           iconClassName="bg-blue-500/15 text-blue-600"
         />
         <OverviewKpiCard
-          label="Active positions"
+          label="Actionable signals"
           value={String(kpis.buyCount + kpis.sellCount)}
-          hint={`${kpis.buyCount} long · ${kpis.sellCount} short`}
+          hint={`${kpis.buyCount} buy · ${kpis.sellCount} sell`}
           icon={Briefcase}
           iconClassName="bg-violet-500/15 text-violet-600"
         />
         <OverviewKpiCard
-          label="Open hypotheses"
+          label="Watch / conflicts"
           value={String(kpis.watchCount + kpis.conflictCount)}
           hint={
             kpis.conflictCount > 0

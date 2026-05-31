@@ -61,15 +61,6 @@ export interface WorkflowRun {
   errorMessage?: string
 }
 
-export interface SymbolMarketStatus {
-  symbol: string
-  name: string
-  isActive: boolean
-  latestCandleAt?: string
-  dataFetchedAt?: string
-  lastClose?: number
-}
-
 /** Enriched watchlist row from Alpaca bars + features (workspace /symbols). */
 export interface SymbolMarketDetail {
   symbol: string
@@ -348,10 +339,6 @@ export const pipelineApi = {
   refreshResearch: (workspaceId: string) =>
     api.post<ResearchRefreshResult>(
       `/api/v1/workspaces/${workspaceId}/research/refresh`,
-    ),
-  priceChart: (workspaceId: string, symbol: string) =>
-    api.get<PriceChartSeries>(
-      `/api/v1/workspaces/${workspaceId}/price-chart?symbol=${encodeURIComponent(symbol)}`,
     ),
   priceChartLive: (workspaceId: string, symbol: string) =>
     api.get<PriceChartSeries>(

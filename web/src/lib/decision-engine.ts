@@ -1,146 +1,32 @@
 import type {
   DecisionView,
   FinbertMetrics,
-  HorizonOutlook,
-  MarketFeatures,
-  OutlookLabel,
   ResearchStockRow,
 } from "@/lib/pipeline-api"
 
 export function resolveDecision(row: ResearchStockRow): DecisionView {
-  const base =
-    row.decision && row.decision.horizons?.length >= 3
-      ? row.decision
-      : fallbackDecision(row)
-  return enrichNewsStance(base, row)
+  if (row.decision && row.decision.horizons?.length >= 3) {
+    return row.decision
+  }
+  return unavailableDecision()
 }
 
-function enrichNewsStance(d: DecisionView, row: ResearchStockRow): DecisionView {
-  if (d.newsStance && d.newsStance !== "unknown") {
-    return d
-  }
-  const inferred = inferNewsFromRow(row)
-  if (!inferred) {
-    return d
-  }
+function unavailableDecision(): DecisionView {
   return {
-    ...d,
-    newsStance: inferred.stance,
-    newsConfidence: inferred.confidence ?? d.newsConfidence,
-  }
-}
-
-function inferNewsFromRow(row: ResearchStockRow): { stance: string; confidence?: number } | null {
-  const nf = row.news
-  if (!nf) {
-    return { stance: "no_news" }
-  }
-  const articles = nf.newsCount24h || nf.newsCount4h || nf.newsCount1h || 0
-  if (articles === 0) {
-    return { stance: "no_news" }
-  }
-
-  const fb = finbertForRow(row)
-  let score: number | undefined
-  const confParts: number[] = []
-  let acc = 0
-  let wsum = 0
-
-  const addWindow = (sent?: number, count?: number, weight = 1, modelConf?: number) => {
-    if (sent == null || !count) return
-    const coverage = Math.min(1, count / 3)
-    acc += sent * weight * coverage
-    wsum += weight * coverage
-    if (modelConf != null) confParts.push(modelConf)
-  }
-
-  addWindow(nf.avgSentiment1h, nf.newsCount1h, 1.2, fb?.avgConfidence1h)
-  addWindow(nf.avgSentiment4h, nf.newsCount4h, 1, fb?.avgConfidence4h)
-  addWindow(nf.avgSentiment24h, nf.newsCount24h, 0.85, fb?.avgConfidence24h)
-  if (wsum > 0) score = acc / wsum
-
-  if (score == null && fb?.weightedSentiment24h != null) {
-    score = fb.weightedSentiment24h
-    if (fb.avgConfidence24h != null) confParts.push(fb.avgConfidence24h)
-  } else if (score == null && fb?.positiveLabelPct24h != null) {
-    const pos = fb.positiveLabelPct24h
-    const neg = fb.negativeLabelPct24h ?? 0
-    score = pos - neg
-    confParts.push(0.45)
-  } else if (score == null && nf.avgSentiment24h != null) {
-    score = nf.avgSentiment24h
-  }
-
-  if (score != null) {
-    const sampleConf = 1 - Math.exp(-articles / 5)
-    const modelConf =
-      confParts.length > 0
-        ? confParts.reduce((a, b) => a * b, 1) ** (1 / confParts.length)
-        : 0.35
-    return {
-      stance: stanceFromSentiment(score),
-      confidence: Math.min(0.95, Math.sqrt(sampleConf * modelConf)),
-    }
-  }
-
-  return { stance: "neutral", confidence: 0.22 }
-}
-
-function fallbackDecision(row: ResearchStockRow): DecisionView {
-  const hasMarket =
-    row.market != null &&
-    (row.market.priceChange24h != null ||
-      row.market.rsi != null ||
-      row.market.volatility != null)
-  const hasNews =
-    row.news != null &&
-    ((row.news.newsCount24h ?? 0) > 0 ||
-      row.news.avgSentiment24h != null ||
-      finbertForRow(row) != null)
-  if (!hasMarket && !hasNews) {
-    return {
-      primaryAction: "watch",
-      primaryOutlook: "No data",
-      compositeScore: 0,
-      confidence: 0.15,
-      riskLevel: "medium",
-      alignment: "mixed",
-      conflict: false,
-      newsStance: "no_news",
-      priceTrend: "unknown",
-      drivers: ["Insufficient data — score is 0 until market or news features load"],
-      horizons: [
-        { id: "short", label: "3D", score: 0, outlook: "watch", confidence: 0.15 },
-        { id: "swing", label: "1W", score: 0, outlook: "watch", confidence: 0.15 },
-        { id: "position", label: "1M", score: 0, outlook: "watch", confidence: 0.15 },
-      ],
-    }
-  }
-
-  const composite = Math.round(Math.min(100, Math.max(0, 50 + row.score * 25)) * 10) / 10
-  const outlook = scoreToOutlook(composite)
-  const horizon: HorizonOutlook = {
-    id: "swing",
-    label: "1W",
-    score: composite,
-    outlook,
-    confidence: row.confidence,
-  }
-  return {
-    primaryAction: row.recommendation,
-    primaryOutlook: outlookToLabel(outlook),
-    compositeScore: composite,
-    confidence: row.confidence,
+    primaryAction: "watch",
+    primaryOutlook: "No data",
+    compositeScore: 0,
+    confidence: 0,
     riskLevel: "medium",
     alignment: "mixed",
     conflict: false,
-    newsStance: stanceFromSentiment(row.news?.avgSentiment24h),
-    priceTrend: priceTrendFromMarket(row.market),
-    drivers: row.bullets.slice(0, 2),
+    newsStance: "unknown",
+    priceTrend: "unknown",
+    drivers: ["Decision engine data not loaded for this symbol"],
     horizons: [
-      { ...horizon, id: "short", label: "3D" },
-      horizon,
-      { ...horizon, id: "position", label: "1M" },
+      { id: "short", label: "3D", score: 0, outlook: "watch", confidence: 0 },
+      { id: "swing", label: "1W", score: 0, outlook: "watch", confidence: 0 },
+      { id: "position", label: "1M", score: 0, outlook: "watch", confidence: 0 },
     ],
   }
 }
@@ -151,7 +37,7 @@ export function finbertForRow(row: ResearchStockRow): FinbertMetrics | undefined
   return undefined
 }
 
-export function outlookToLabel(outlook: OutlookLabel | string): string {
+export function outlookToLabel(outlook: string): string {
   switch (outlook) {
     case "strong_buy":
       return "Strong buy"
@@ -166,14 +52,6 @@ export function outlookToLabel(outlook: OutlookLabel | string): string {
   }
 }
 
-export function outlookTone(
-  outlook: OutlookLabel | string,
-): "positive" | "negative" | "neutral" {
-  if (outlook === "strong_buy" || outlook === "buy") return "positive"
-  if (outlook === "sell" || outlook === "avoid") return "negative"
-  return "neutral"
-}
-
 export function alignmentLabel(alignment: string): string {
   switch (alignment) {
     case "aligned_bullish":
@@ -185,12 +63,6 @@ export function alignmentLabel(alignment: string): string {
     default:
       return "Mixed"
   }
-}
-
-export function riskTone(level: string): "positive" | "negative" | "neutral" {
-  if (level === "low") return "positive"
-  if (level === "high") return "negative"
-  return "neutral"
 }
 
 export function stanceLabel(stance: string): string {
@@ -212,7 +84,7 @@ export function stanceLabel(stance: string): string {
 export function signalSubline(decision: DecisionView): string {
   const outlook = decision.primaryOutlook
   const parts = [`Outlook: ${outlook}`]
-  if (decision.primaryAction === "watch" && outlook !== "Watch") {
+  if (decision.primaryAction === "watch" && outlook !== "Watch" && outlook !== "No data") {
     parts.push("trade gated")
   }
   if (
@@ -223,19 +95,6 @@ export function signalSubline(decision: DecisionView): string {
     parts.push(`conf ${(decision.confidence * 100).toFixed(0)}%`)
   }
   return parts.join(" · ")
-}
-
-export function priceTrendLabel(trend: string): string {
-  switch (trend) {
-    case "uptrend":
-      return "Uptrend"
-    case "downtrend":
-      return "Downtrend"
-    case "sideways":
-      return "Sideways"
-    default:
-      return "—"
-  }
 }
 
 export function buildTraderKpis(
@@ -295,7 +154,7 @@ export function buildTraderKpis(
   ]
 }
 
-export function summarizeDecisions(rows: ResearchStockRow[]) {
+function summarizeDecisions(rows: ResearchStockRow[]) {
   let alignedBull = 0
   let alignedBear = 0
   let conflict = 0
@@ -310,26 +169,4 @@ export function summarizeDecisions(rows: ResearchStockRow[]) {
   }
 
   return { alignedBull, alignedBear, conflict, highRisk }
-}
-
-function scoreToOutlook(score: number): OutlookLabel {
-  if (score >= 78) return "strong_buy"
-  if (score >= 62) return "buy"
-  if (score >= 45) return "watch"
-  if (score >= 32) return "sell"
-  return "avoid"
-}
-
-function stanceFromSentiment(s?: number): string {
-  if (s == null) return "unknown"
-  if (s > 0.2) return "bullish"
-  if (s < -0.2) return "bearish"
-  return "neutral"
-}
-
-function priceTrendFromMarket(m?: MarketFeatures): string {
-  if (m?.priceChange24h == null) return "unknown"
-  if (m.priceChange24h > 2) return "uptrend"
-  if (m.priceChange24h < -2) return "downtrend"
-  return "sideways"
 }

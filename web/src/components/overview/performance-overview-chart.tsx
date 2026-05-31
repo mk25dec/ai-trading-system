@@ -10,13 +10,17 @@ const RANGES: PerformanceRange[] = ["7D", "1M", "3M", "1Y", "All"]
 type PerformanceOverviewChartProps = {
   labels: string[]
   strategy: number[]
-  benchmark: number[]
+  benchmark: (number | null)[]
   range: PerformanceRange
   onRangeChange: (range: PerformanceRange) => void
 }
 
-function buildOption(labels: string[], strategy: number[], benchmark: number[]): EChartsOption {
-  const hasBenchmark = benchmark.some((v) => v !== 0)
+function buildOption(
+  labels: string[],
+  strategy: number[],
+  benchmark: (number | null)[],
+): EChartsOption {
+  const hasBenchmark = benchmark.some((v) => v != null)
   return {
     backgroundColor: "transparent",
     animationDuration: 300,
@@ -25,7 +29,7 @@ function buildOption(labels: string[], strategy: number[], benchmark: number[]):
       top: 0,
       left: 0,
       textStyle: { color: "#64748b", fontSize: 11 },
-      data: hasBenchmark ? ["Strategy return", "SPY (Benchmark)"] : ["Strategy return"],
+      data: hasBenchmark ? ["Watchlist avg return", "SPY (Benchmark)"] : ["Watchlist avg return"],
     },
     tooltip: {
       trigger: "axis",
@@ -55,7 +59,7 @@ function buildOption(labels: string[], strategy: number[], benchmark: number[]):
     },
     series: [
       {
-        name: "Strategy return",
+        name: "Watchlist avg return",
         type: "line",
         smooth: true,
         symbol: "circle",

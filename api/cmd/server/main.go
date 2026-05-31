@@ -290,12 +290,6 @@ func registerAPIRoutes(r chi.Router, cfg config.Config, pool *pgxpool.Pool) {
 			})
 
 			r.Get("/workflows/runs", pipelinePublic.ListWorkflowRuns)
-			r.Get("/news/backlog", pipelinePublic.ListBacklog)
-			r.Get("/news/articles", pipelinePublic.ListArticles)
-			r.Get("/symbols", pipelinePublic.ListSymbols)
-			r.Get("/symbols/snapshots/latest", pipelinePublic.LatestSnapshots)
-			r.Get("/features/market/latest", pipelinePublic.LatestMarketFeatures)
-			r.Get("/features/news/latest", pipelinePublic.LatestNewsFeatures)
 		})
 
 		r.Route("/internal", func(r chi.Router) {

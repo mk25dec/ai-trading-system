@@ -46,7 +46,11 @@ export function PipelineHealthCard({
                   p.pct === 0 && p.status !== "unknown" && "text-red-600 dark:text-red-400",
                 )}
               >
-                {p.status === "unknown" ? "—" : `${p.pct}%`}
+                {p.status === "unknown"
+                  ? "—"
+                  : p.status === "success"
+                    ? "OK"
+                    : p.status}
               </span>
             </li>
           ))}

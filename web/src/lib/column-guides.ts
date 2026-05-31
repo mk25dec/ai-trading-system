@@ -144,13 +144,6 @@ export const traderOutlookColumnGuides: Record<string, ColumnGuide> = {
     negative: "Downward slope — recent weakness.",
     neutral: "Flat — consolidation.",
   },
-  priceOutlook: {
-    title: "Price outlook",
-    meaning: "Model projection with ±1σ band and P(up) at 3M. Click to open detail chart.",
-    positive: "Green dashed path / high P↑ — model favors upside.",
-    negative: "Red path / low P↑ — model favors downside.",
-    neutral: "~50% P↑ — balanced outlook.",
-  },
   signal: {
     title: "Signal",
     meaning: "Primary action from the decision engine (buy / sell / watch / avoid).",

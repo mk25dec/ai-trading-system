@@ -1,6 +1,5 @@
 import { resolveDecision } from "@/lib/decision-engine"
 import type {
-  MarketCandle,
   ResearchStockRow,
   WorkflowRun,
   WorkspaceSignal,
@@ -68,7 +67,7 @@ function rangeToDays(range: PerformanceRange): number {
 export function buildPerformanceSeries(
   rows: ResearchStockRow[],
   range: PerformanceRange,
-): { labels: string[]; strategy: number[]; benchmark: number[] } {
+): { labels: string[]; strategy: number[]; benchmark: (number | null)[] } {
   const days = rangeToDays(range)
   const cutoff = Date.now() - days * 86_400_000
 
@@ -103,7 +102,7 @@ export function buildPerformanceSeries(
     const vals = byDate.get(d) ?? []
     return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0
   })
-  const benchmark = labels.map((d) => benchmarkByDate.get(d) ?? 0)
+  const benchmark = labels.map((d) => benchmarkByDate.get(d) ?? null)
 
   return { labels, strategy, benchmark }
 }
@@ -178,11 +177,10 @@ export function buildPipelineHealth(runs: WorkflowRun[]) {
     if (!run) {
       return { key, label, pct: 0, status: "unknown" as const }
     }
-    const ok = run.status === "success"
     return {
       key,
       label,
-      pct: ok ? 100 : run.status === "partial" ? 75 : 0,
+      pct: run.status === "success" ? 100 : 0,
       status: run.status,
     }
   })
@@ -196,8 +194,8 @@ export function summarizeOverviewKpis(
   signals: WorkspaceSignal[],
 ) {
   const notional = computeWatchlistNotional(rows)
-  const avgReturn = computeAvgReturn(rows) ?? 0
-  const returnUsd = notional * (avgReturn / 100)
+  const avgReturn = computeAvgReturn(rows)
+  const returnUsd = avgReturn != null ? notional * (avgReturn / 100) : 0
 
   const buyCount = rows.filter((r) => resolveDecision(r).primaryAction === "buy_candidate").length
   const sellCount = rows.filter((r) => resolveDecision(r).primaryAction === "sell_candidate").length
@@ -233,22 +231,4 @@ export function trendFromRow(row: ResearchStockRow): "up" | "down" | "flat" {
   if (change > 0.5) return "up"
   if (change < -0.5) return "down"
   return "flat"
-}
-
-export function aggregateSparkline(rows: ResearchStockRow[]): MarketCandle[] {
-  const byTs = new Map<string, number[]>()
-  for (const row of rows) {
-    for (const c of row.candles.slice(-14)) {
-      const key = c.timestamp
-      const bucket = byTs.get(key) ?? []
-      bucket.push(c.close)
-      byTs.set(key, bucket)
-    }
-  }
-  return [...byTs.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([timestamp, closes]) => {
-      const close = closes.reduce((a, b) => a + b, 0) / closes.length
-      return { symbol: "AGG", timeframe: "1d", timestamp, open: close, high: close, low: close, close, volume: 0 }
-    })
 }
