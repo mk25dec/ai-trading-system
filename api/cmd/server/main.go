@@ -232,6 +232,12 @@ func registerAPIRoutes(r chi.Router, cfg config.Config, pool *pgxpool.Pool) {
 			APIKey:  cfg.FinbertAPIKey,
 		},
 	}
+	symbolsHandler := handlers.SymbolsHandler{
+		Store: pipeline,
+		SEC: &services.SECClient{
+			UserAgent: cfg.SECUserAgent,
+		},
+	}
 	priceChartHandler := handlers.PriceChartHandler{
 		Store:      pipeline,
 		Workspaces: workspaces,
@@ -260,6 +266,7 @@ func registerAPIRoutes(r chi.Router, cfg config.Config, pool *pgxpool.Pool) {
 			r.Get("/analytics/status", analyticsHandler.Status)
 			r.Post("/finbert/analyze", finbertHandler.Analyze)
 			r.Get("/finbert/health", finbertHandler.Health)
+			r.Post("/symbols/sec/sync", symbolsHandler.SyncSECCompanyTickers)
 
 			r.Get("/users/lookup", userHandler.Lookup)
 

@@ -1065,6 +1065,71 @@ func (s *PipelineStore) SymbolsNeedingCatalogEnrichment(ctx context.Context, sym
 	return out, rows.Err()
 }
 
+const secSymbolUpsertBatchSize = 250
+
+// UpsertSECSymbols stores SEC company_tickers.json rows into symbols (name + metadata.cik_str).
+func (s *PipelineStore) UpsertSECSymbols(ctx context.Context, entries []models.SECSymbolEntry) (int, error) {
+	if len(entries) == 0 {
+		return 0, nil
+	}
+
+	syncedAt := time.Now().UTC().Format(time.RFC3339)
+	upserted := 0
+
+	for start := 0; start < len(entries); start += secSymbolUpsertBatchSize {
+		end := start + secSymbolUpsertBatchSize
+		if end > len(entries) {
+			end = len(entries)
+		}
+		batch := entries[start:end]
+
+		tx, err := s.pool.Begin(ctx)
+		if err != nil {
+			return upserted, err
+		}
+
+		for _, e := range batch {
+			name := catalog.SanitizeName(e.Symbol, e.Name)
+			meta, err := json.Marshal(map[string]any{
+				"sec": map[string]any{
+					"cik_str":   e.CIK,
+					"source":    "sec_company_tickers",
+					"synced_at": syncedAt,
+				},
+			})
+			if err != nil {
+				_ = tx.Rollback(ctx)
+				return upserted, err
+			}
+
+			tag, err := tx.Exec(ctx, `
+				INSERT INTO symbols (symbol, name, asset_class, is_active, metadata, updated_at)
+				VALUES ($1, $2, 'equity', TRUE, $3::jsonb, NOW())
+				ON CONFLICT (symbol) DO UPDATE SET
+					name = CASE
+						WHEN EXCLUDED.name <> '' THEN EXCLUDED.name
+						ELSE symbols.name
+					END,
+					metadata = symbols.metadata || EXCLUDED.metadata,
+					asset_class = COALESCE(NULLIF(symbols.asset_class, ''), EXCLUDED.asset_class),
+					is_active = TRUE,
+					updated_at = NOW()`,
+				e.Symbol, name, meta)
+			if err != nil {
+				_ = tx.Rollback(ctx)
+				return upserted, fmt.Errorf("upsert sec symbol %s: %w", e.Symbol, err)
+			}
+			upserted += int(tag.RowsAffected())
+		}
+
+		if err := tx.Commit(ctx); err != nil {
+			return upserted, err
+		}
+	}
+
+	return upserted, nil
+}
+
 // UpsertSymbolCatalog updates symbol metadata from Alpaca asset lookup.
 func (s *PipelineStore) UpsertSymbolCatalog(ctx context.Context, symbol, name string, exchange *string, assetClass string) error {
 	if assetClass == "" {

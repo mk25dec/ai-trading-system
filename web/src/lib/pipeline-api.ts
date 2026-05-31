@@ -329,6 +329,11 @@ export interface FinbertHealthResult {
   raw?: Record<string, unknown>
 }
 
+export interface SECSymbolSyncResult {
+  fetched: number
+  upserted: number
+}
+
 export const pipelineApi = {
   workflowRuns: () => api.get<WorkflowRun[]>("/api/v1/workflows/runs"),
   newsRawFeed: (workspaceId: string, status?: string) =>
@@ -372,4 +377,5 @@ export const pipelineApi = {
   analyzeFinbert: (text: string) =>
     api.post<FinbertAnalyzeResult>("/api/v1/finbert/analyze", { text }),
   finbertHealth: () => api.get<FinbertHealthResult>("/api/v1/finbert/health"),
+  syncSECTickers: () => api.post<SECSymbolSyncResult>("/api/v1/symbols/sec/sync"),
 }

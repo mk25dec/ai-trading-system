@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ApiError } from "@/lib/api"
 import { formatProb, formatSentiment, probClass, sentimentClass } from "@/lib/feature-metrics"
-import { pipelineApi, type FinbertAnalyzeResult } from "@/lib/pipeline-api"
+import { pipelineApi, type FinbertAnalyzeResult, type SECSymbolSyncResult } from "@/lib/pipeline-api"
 import { cn } from "@/lib/utils"
 
 const SAMPLE_TEXT =
@@ -16,6 +16,7 @@ const SAMPLE_TEXT =
 export function TestPage() {
   const [text, setText] = useState(SAMPLE_TEXT)
   const [result, setResult] = useState<FinbertAnalyzeResult | null>(null)
+  const [secResult, setSecResult] = useState<SECSymbolSyncResult | null>(null)
 
   const health = useQuery({
     queryKey: ["finbert-health"],
@@ -35,6 +36,17 @@ export function TestPage() {
         toast.error(e.message || "FinBERT model still loading — retry in a minute")
         return
       }
+      toast.error(e.message)
+    },
+  })
+
+  const secSync = useMutation({
+    mutationFn: () => pipelineApi.syncSECTickers(),
+    onSuccess: (data) => {
+      setSecResult(data)
+      toast.success(`Stored ${data.upserted} ticker rows (${data.fetched} from SEC)`)
+    },
+    onError: (e: Error) => {
       toast.error(e.message)
     },
   })
@@ -112,6 +124,35 @@ export function TestPage() {
             </Button>
             <span className="text-xs text-muted-foreground">{text.trim().length} chars</span>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/70 shadow-sm">
+        <CardHeader>
+          <CardTitle>SEC ticker universe</CardTitle>
+          <CardDescription>
+            Fetches{" "}
+            <code className="text-xs">https://www.sec.gov/files/company_tickers.json</code> and
+            upserts tickers into the <code className="text-xs">symbols</code> table (symbol, company
+            name, CIK in metadata).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              onClick={() => secSync.mutate()}
+              disabled={secSync.isPending}
+            >
+              {secSync.isPending ? "Fetching…" : "Get ticker symbols"}
+            </Button>
+          </div>
+          {secResult && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <MetricCard label="Fetched from SEC" value={String(secResult.fetched)} />
+              <MetricCard label="Rows upserted" value={String(secResult.upserted)} />
+            </div>
+          )}
         </CardContent>
       </Card>
 

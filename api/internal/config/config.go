@@ -25,6 +25,7 @@ type Config struct {
 	AlpacaAPIKey      string
 	AlpacaAPISecret   string
 	FinnhubAPIKey     string
+	SECUserAgent      string
 }
 
 func Load() (Config, error) {
@@ -63,13 +64,15 @@ func Load() (Config, error) {
 		}
 	}
 
+	adminEmail := os.Getenv("ADMIN_EMAIL")
+
 	return Config{
 		Port:            port,
 		DatabaseURL:     dbURL,
 		DuckDBPath:      duckPath,
 		JWTSecret:       jwtSecret,
 		CORSOrigin:      corsOrigin,
-		AdminEmail:      os.Getenv("ADMIN_EMAIL"),
+		AdminEmail:      adminEmail,
 		AdminPassword:   os.Getenv("ADMIN_PASSWORD"),
 		SecureCookies:   secure,
 		InternalAPIKey:  os.Getenv("INTERNAL_API_KEY"),
@@ -81,7 +84,18 @@ func Load() (Config, error) {
 		AlpacaAPIKey:    os.Getenv("ALPACA_API_KEY"),
 		AlpacaAPISecret: os.Getenv("ALPACA_API_SECRET"),
 		FinnhubAPIKey:   os.Getenv("FINNHUB_API_KEY"),
+		SECUserAgent:    defaultSECUserAgent(adminEmail),
 	}, nil
+}
+
+func defaultSECUserAgent(adminEmail string) string {
+	if v := os.Getenv("SEC_USER_AGENT"); v != "" {
+		return v
+	}
+	if adminEmail != "" {
+		return "TradingAI-Bot " + adminEmail
+	}
+	return "TradingAI-Bot admin@example.com"
 }
 
 func envOr(key, fallback string) string {
