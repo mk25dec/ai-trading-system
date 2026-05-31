@@ -331,6 +331,10 @@ export interface FinbertHealthResult {
 
 export const pipelineApi = {
   workflowRuns: () => api.get<WorkflowRun[]>("/api/v1/workflows/runs"),
+  newsRawFeed: (workspaceId: string, status?: string) =>
+    api.get<NewsBacklogItem[]>(
+      `/api/v1/workspaces/${workspaceId}/news/feed/raw${status ? `?status=${status}` : ""}`,
+    ),
   newsBacklog: (workspaceId: string, status?: string) =>
     api.get<NewsBacklogItem[]>(
       `/api/v1/workspaces/${workspaceId}/news/backlog${status ? `?status=${status}` : ""}`,

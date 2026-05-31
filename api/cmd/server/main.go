@@ -286,6 +286,7 @@ func registerAPIRoutes(r chi.Router, cfg config.Config, pool *pgxpool.Pool) {
 				r.Get("/{id}/signals", pipelinePublic.ListWorkspaceSignals)
 				r.Get("/{id}/watchlist", pipelinePublic.GetWatchlist)
 				r.Put("/{id}/watchlist", pipelinePublic.SetWatchlist)
+				r.Get("/{id}/news/feed/raw", pipelinePublic.ListWorkspaceRawFeed)
 				r.Get("/{id}/news/backlog", pipelinePublic.ListWorkspaceBacklog)
 				r.Get("/{id}/news/articles", pipelinePublic.ListWorkspaceArticles)
 				r.Get("/{id}/symbols", pipelinePublic.ListWorkspaceSymbols)

@@ -138,6 +138,27 @@ func (s *PipelineStore) UpsertArticle(ctx context.Context, a models.NewsArticle)
 	return out, nil
 }
 
+func (s *PipelineStore) ListRecentBacklog(ctx context.Context, status string, limit int) ([]models.NewsBacklogItem, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 100
+	}
+	q := `SELECT id, source, url, canonical_url, title, published_at, discovered_at, raw_symbol_guess, status, error_message, metadata, created_at, updated_at
+		FROM news_backlog`
+	args := []any{limit}
+	if status != "" {
+		q += ` WHERE status = $2`
+		args = append(args, status)
+	}
+	q += ` ORDER BY COALESCE(published_at, discovered_at) DESC NULLS LAST, discovered_at DESC LIMIT $1`
+
+	rows, err := s.pool.Query(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanBacklogRows(rows)
+}
+
 func (s *PipelineStore) ListBacklogForSymbols(ctx context.Context, symbols []string, status string, limit int) ([]models.NewsBacklogItem, error) {
 	if len(symbols) == 0 {
 		return []models.NewsBacklogItem{}, nil

@@ -145,6 +145,25 @@ func (h PipelinePublicHandler) activeWatchlistSymbols(ctx context.Context, works
 	return symbols, nil
 }
 
+func (h PipelinePublicHandler) ListWorkspaceRawFeed(w http.ResponseWriter, r *http.Request) {
+	workspaceID := chi.URLParam(r, "id")
+	user := middleware.UserFromContext(r.Context())
+	if !h.canAccessWorkspace(r, workspaceID, user) {
+		WriteError(w, http.StatusForbidden, "access denied")
+		return
+	}
+	status := r.URL.Query().Get("status")
+	items, err := h.Store.ListRecentBacklog(r.Context(), status, 100)
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "query failed")
+		return
+	}
+	if items == nil {
+		items = []models.NewsBacklogItem{}
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
 func (h PipelinePublicHandler) ListWorkspaceBacklog(w http.ResponseWriter, r *http.Request) {
 	workspaceID := chi.URLParam(r, "id")
 	user := middleware.UserFromContext(r.Context())

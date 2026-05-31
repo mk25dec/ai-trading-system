@@ -14,6 +14,7 @@ export function useDataRefresh(workspaceId: string) {
       setLastRefreshedAt(now)
 
       void queryClient.invalidateQueries({ queryKey: ["research-board", workspaceId] })
+      void queryClient.invalidateQueries({ queryKey: ["news-raw-feed", workspaceId] })
       void queryClient.invalidateQueries({ queryKey: ["news-backlog", workspaceId] })
       void queryClient.invalidateQueries({ queryKey: ["news-articles", workspaceId] })
       void queryClient.invalidateQueries({ queryKey: ["symbols", workspaceId] })
