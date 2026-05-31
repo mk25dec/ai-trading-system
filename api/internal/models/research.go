@@ -28,6 +28,7 @@ type ResearchStockRow struct {
 	News           *NewsFeatures     `json:"news,omitempty"`
 	Candles        []MarketCandle    `json:"candles"`
 	Headlines      []ResearchHeadline `json:"headlines"`
+	ForwardPoints  []PriceChartPoint  `json:"forwardPoints,omitempty"`
 	Signal         *WorkspaceSignal  `json:"signal,omitempty"`
 	UpdatedAt      *time.Time        `json:"updatedAt,omitempty"`
 }

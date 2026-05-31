@@ -6,8 +6,8 @@ import (
 )
 
 var (
-	tickerRe      = regexp.MustCompile(`\b([A-Z]{1,5})\b`)
-	titleParenRe  = regexp.MustCompile(`\(([A-Z]{1,5})\)`)
+	tickerRe     = regexp.MustCompile(`\b([A-Z]{1,5})\b`)
+	titleParenRe = regexp.MustCompile(`\(([A-Z]{1,5})\)`)
 )
 
 // companyAliases maps common names to tickers in our universe.
@@ -29,7 +29,11 @@ func DetectSymbols(title, body string, universe map[string]bool, guesses []strin
 	found := map[string]DetectedSymbol{}
 
 	add := func(sym, method string, score, conf float64) {
-		if !universe[sym] {
+		sym = strings.ToUpper(strings.TrimSpace(sym))
+		if sym == "" || ambiguousWords[sym] {
+			return
+		}
+		if method != "title_paren" && method != "source_metadata" && !universe[sym] {
 			return
 		}
 		if existing, ok := found[sym]; ok && existing.RelevanceScore >= score {
@@ -45,8 +49,14 @@ func DetectSymbols(title, body string, universe map[string]bool, guesses []strin
 		}
 	}
 
-	for _, d := range extractTickersFromTitle(title, universe) {
+	titleParen := extractTickersFromTitle(title)
+	for _, d := range titleParen {
 		add(d.Symbol, d.DetectionMethod, d.RelevanceScore, d.Confidence)
+	}
+
+	// Parenthesized tickers in the headline are authoritative — skip body noise.
+	if len(titleParen) > 0 {
+		return detectedList(found)
 	}
 
 	titleUpper := strings.ToUpper(title)
@@ -64,7 +74,6 @@ func DetectSymbols(title, body string, universe map[string]bool, guesses []strin
 		}
 	}
 
-	// Title-first: if we already matched specific tickers, skip noisy body scanning.
 	if len(found) > 0 {
 		return detectedList(found)
 	}
@@ -90,13 +99,13 @@ func DetectSymbols(title, body string, universe map[string]bool, guesses []strin
 	return detectedList(found)
 }
 
-func extractTickersFromTitle(title string, universe map[string]bool) []DetectedSymbol {
+func extractTickersFromTitle(title string) []DetectedSymbol {
 	upper := strings.ToUpper(title)
 	seen := map[string]bool{}
 	var out []DetectedSymbol
 	for _, m := range titleParenRe.FindAllStringSubmatch(upper, -1) {
 		sym := m[1]
-		if !universe[sym] || seen[sym] || ambiguousWords[sym] {
+		if seen[sym] || ambiguousWords[sym] {
 			continue
 		}
 		seen[sym] = true

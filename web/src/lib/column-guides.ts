@@ -146,7 +146,7 @@ export const traderOutlookColumnGuides: Record<string, ColumnGuide> = {
   },
   signal: {
     title: "Signal",
-    meaning: "Primary action from the decision engine (buy / sell / watch / avoid).",
+    meaning: "Primary action plus hist/projection mini chart (Alpaca bars + server formula forward path).",
     positive: "Buy candidate — rules lean bullish.",
     negative: "Sell or avoid — rules lean bearish or blocked.",
     neutral: "Watch — wait for confirmation.",

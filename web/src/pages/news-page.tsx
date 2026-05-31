@@ -12,7 +12,22 @@ import {
 } from "@/components/ui/table"
 import { useDataRefresh } from "@/hooks/use-data-refresh"
 import { formatDateTime, useWorkspace } from "@/hooks/use-workspace"
-import { pipelineApi } from "@/lib/pipeline-api"
+import { pipelineApi, type ArticleSentiment, type ArticleWithDetails } from "@/lib/pipeline-api"
+
+function articleDisplaySymbols(article: ArticleWithDetails): string[] {
+  if ((article.titleSymbols ?? []).length > 0) {
+    return article.titleSymbols ?? []
+  }
+  return (article.symbols ?? []).map((s) => s.symbol)
+}
+
+function articleDisplaySentiment(article: ArticleWithDetails): ArticleSentiment[] {
+  const symbols = articleDisplaySymbols(article)
+  const all = article.sentiment ?? []
+  if (symbols.length === 0) return all
+  const matched = all.filter((s) => symbols.includes(s.symbol))
+  return matched.length > 0 ? matched : all
+}
 
 export function NewsPage() {
   const { workspaceId, selectWorkspace, workspaces, activeWorkspace } = useWorkspace()
@@ -155,12 +170,12 @@ export function NewsPage() {
                       </a>
                     </TableCell>
                     <TableCell className="font-mono text-xs">
-                      {(article.symbols ?? []).map((s) => s.symbol).join(", ") || "—"}
+                      {articleDisplaySymbols(article).join(", ") || "—"}
                     </TableCell>
                     <TableCell>
-                      {(article.sentiment ?? []).length > 0 ? (
+                      {articleDisplaySentiment(article).length > 0 ? (
                         <div className="flex flex-wrap gap-1">
-                          {(article.sentiment ?? []).map((s) => (
+                          {articleDisplaySentiment(article).map((s) => (
                             <Badge
                               key={`${article.id}-${s.symbol}`}
                               variant={

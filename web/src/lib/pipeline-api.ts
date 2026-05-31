@@ -48,6 +48,7 @@ export interface ArticleWithDetails {
   cleanedText: string
   symbols?: ArticleSymbol[]
   sentiment?: ArticleSentiment[]
+  titleSymbols?: string[]
 }
 
 export interface WorkflowRun {
@@ -260,6 +261,7 @@ export interface ResearchStockRow {
   news?: NewsFeatures
   candles: MarketCandle[]
   headlines: ResearchHeadline[]
+  forwardPoints?: PriceChartPoint[]
   updatedAt?: string
 }
 

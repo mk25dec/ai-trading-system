@@ -189,6 +189,9 @@ func (h PipelinePublicHandler) ListWorkspaceArticles(w http.ResponseWriter, r *h
 	if items == nil {
 		items = []models.ArticleWithDetails{}
 	}
+	for i := range items {
+		items[i].TitleSymbols = services.GuessSymbolsFromTitle(items[i].Title)
+	}
 	writeJSON(w, http.StatusOK, items)
 }
 

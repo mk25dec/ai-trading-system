@@ -239,6 +239,7 @@ type WorkspaceSignal struct {
 
 type ArticleWithDetails struct {
 	NewsArticle
-	Symbols   []ArticleSymbol   `json:"symbols,omitempty"`
-	Sentiment []ArticleSentiment `json:"sentiment,omitempty"`
+	TitleSymbols []string          `json:"titleSymbols,omitempty"`
+	Symbols      []ArticleSymbol   `json:"symbols,omitempty"`
+	Sentiment    []ArticleSentiment `json:"sentiment,omitempty"`
 }

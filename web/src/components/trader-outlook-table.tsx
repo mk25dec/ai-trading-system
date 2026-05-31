@@ -2,6 +2,7 @@ import type { ReactNode } from "react"
 import { AlertTriangle, ChevronDown, ChevronRight, Newspaper } from "lucide-react"
 import { DecisionHeroPanel } from "@/components/decision/decision-hero-panel"
 import { MiniSparkline } from "@/components/decision/mini-sparkline"
+import { SignalOutlookChart } from "@/components/decision/signal-outlook-chart"
 import { ScoreGauge } from "@/components/decision/score-gauge"
 import { HorizonOutlookBadge } from "@/components/horizon-outlook-badge"
 import { RecommendationBadge } from "@/components/recommendation-badge"
@@ -126,6 +127,9 @@ function TraderOutlookRow({
         <TableCell>
           <RecommendationBadge action={action} />
           <p className="mt-1 text-[10px] font-medium text-muted-foreground">{signalSubline(d)}</p>
+          <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+            <SignalOutlookChart candles={row.candles ?? []} forwardPoints={row.forwardPoints} />
+          </div>
         </TableCell>
         <TableCell className="text-right">
           <ScoreGauge
@@ -187,7 +191,7 @@ function TraderOutlookRow({
       </TableRow>
       {open && (
         <TableRow className="hover:bg-transparent">
-          <TableCell colSpan={11} className={cn("border-l-4 bg-muted/15 p-0", actionAccent(action))}>
+          <TableCell colSpan={10} className={cn("border-l-4 bg-muted/15 p-0", actionAccent(action))}>
             <div className="space-y-4 p-5">
               <DecisionHeroPanel decision={d} />
               {renderDetail ? (

@@ -281,6 +281,16 @@ func (h ResearchHandler) buildRow(ctx context.Context, symbol string, stored mod
 		decisionPtr = &d
 	}
 
+	var forward []models.PriceChartPoint
+	if lastClose != nil && *lastClose > 0 {
+		dailyAsc, _ := h.Store.CandlesForSymbolAsc(ctx, symbol, "1Day", 90)
+		anchorTime := time.Now().UTC()
+		if len(candles) > 0 {
+			anchorTime = candles[len(candles)-1].Timestamp
+		}
+		forward = services.BuildForwardChartPoints(anchorTime, *lastClose, symbol, dailyAsc, nf)
+	}
+
 	return models.ResearchStockRow{
 		Symbol:         symbol,
 		Name:           name,
@@ -299,6 +309,7 @@ func (h ResearchHandler) buildRow(ctx context.Context, symbol string, stored mod
 		News:           nf,
 		Candles:        candles,
 		Headlines:      headlines,
+		ForwardPoints:  forward,
 		Signal:         sigPtr,
 		UpdatedAt:      updatedAt,
 	}, nil

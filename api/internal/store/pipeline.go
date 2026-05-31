@@ -180,6 +180,10 @@ func (s *PipelineStore) ListArticlesForSymbols(ctx context.Context, symbols []st
 		WHERE EXISTS (
 			SELECT 1 FROM article_symbols s WHERE s.article_id = a.id AND s.symbol = ANY($2)
 		)
+		OR EXISTS (
+			SELECT 1 FROM unnest($2::text[]) AS wl(sym)
+			WHERE strpos(upper(a.title), '(' || upper(wl.sym) || ')') > 0
+		)
 		ORDER BY a.published_at DESC NULLS LAST, a.created_at DESC LIMIT $1`, limit, symbols)
 	if err != nil {
 		return nil, err
@@ -203,43 +207,13 @@ func (s *PipelineStore) ListArticlesForSymbols(ctx context.Context, symbols []st
 		return nil, err
 	}
 
-	symbolSet := make(map[string]bool, len(symbols))
-	for _, sym := range symbols {
-		symbolSet[strings.ToUpper(sym)] = true
-	}
 	for i := range articles {
 		syms, _ := s.GetArticleSymbols(ctx, articles[i].ID)
 		sent, _ := s.GetArticleSentiment(ctx, articles[i].ID)
-		articles[i].Symbols = filterArticleSymbols(syms, symbolSet)
-		articles[i].Sentiment = filterArticleSentiment(sent, symbolSet)
+		articles[i].Symbols = syms
+		articles[i].Sentiment = sent
 	}
 	return articles, nil
-}
-
-func filterArticleSymbols(syms []models.ArticleSymbol, allowed map[string]bool) []models.ArticleSymbol {
-	if len(syms) == 0 {
-		return syms
-	}
-	out := make([]models.ArticleSymbol, 0, len(syms))
-	for _, sym := range syms {
-		if allowed[strings.ToUpper(sym.Symbol)] {
-			out = append(out, sym)
-		}
-	}
-	return out
-}
-
-func filterArticleSentiment(sent []models.ArticleSentiment, allowed map[string]bool) []models.ArticleSentiment {
-	if len(sent) == 0 {
-		return sent
-	}
-	out := make([]models.ArticleSentiment, 0, len(sent))
-	for _, s := range sent {
-		if allowed[strings.ToUpper(s.Symbol)] {
-			out = append(out, s)
-		}
-	}
-	return out
 }
 
 func (s *PipelineStore) UnmappedArticles(ctx context.Context, limit int) ([]models.NewsArticle, error) {

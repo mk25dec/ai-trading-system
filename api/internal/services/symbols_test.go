@@ -19,6 +19,17 @@ func TestDetectSymbols_prefersTitleTickerInParens(t *testing.T) {
 	}
 }
 
+func TestDetectSymbols_titleParenWithoutUniverse(t *testing.T) {
+	universe := UniverseSet([]string{"IBM", "AAPL"})
+	title := "What Does Willis Lease Finance Corp (WLFC) Notes Offering Say About the Stock?"
+	body := "IBM and Apple shares rose while the market gained."
+
+	got := DetectSymbols(title, body, universe, nil)
+	if len(got) != 1 || got[0].Symbol != "WLFC" {
+		t.Fatalf("got %+v, want only WLFC from title", got)
+	}
+}
+
 func TestDetectSymbols_usesSourceGuesses(t *testing.T) {
 	universe := UniverseSet([]string{"INMD", "NVDA"})
 	title := "Inmode Ltd. (INMD) Outperforms Broader Market"
@@ -45,7 +56,6 @@ func TestDetectSymbols_skipsSingleLetterBodyMatches(t *testing.T) {
 }
 
 func TestExtractTickersFromTitle(t *testing.T) {
-	universe := UniverseSet([]string{"SRPT", "WLFC", "FOO"})
 	cases := []struct {
 		title string
 		want  []string
@@ -56,7 +66,7 @@ func TestExtractTickersFromTitle(t *testing.T) {
 		{"Unknown (FOO) and Willis Lease Finance Corp. (WLFC)", []string{"FOO", "WLFC"}},
 	}
 	for _, tc := range cases {
-		got := extractTickersFromTitle(tc.title, universe)
+		got := extractTickersFromTitle(tc.title)
 		if len(got) != len(tc.want) {
 			t.Fatalf("title %q: len = %d, want %d (%v)", tc.title, len(got), len(tc.want), got)
 		}
