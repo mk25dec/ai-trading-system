@@ -333,8 +333,13 @@ export function ActualPredictedChart({
     render()
     const onResize = () => chartRef.current?.resize()
     window.addEventListener("resize", onResize)
+    const ro = new ResizeObserver(onResize)
+    if (containerRef.current) {
+      ro.observe(containerRef.current)
+    }
     return () => {
       window.removeEventListener("resize", onResize)
+      ro.disconnect()
       chartRef.current?.dispose()
       chartRef.current = null
     }
