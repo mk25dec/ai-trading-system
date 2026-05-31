@@ -33,7 +33,7 @@ function sourceTickers(item: NewsBacklogItem): string {
   const fromGuess = (item.rawSymbolGuess ?? []).join(", ")
   if (fromGuess) return fromGuess
   const meta = item.metadata ?? {}
-  const fromMeta = meta.symbols ?? meta.tickers
+  const fromMeta = meta.symbols ?? meta.tickers ?? meta.relatedTickers
   if (Array.isArray(fromMeta)) {
     return fromMeta.map(String).join(", ")
   }

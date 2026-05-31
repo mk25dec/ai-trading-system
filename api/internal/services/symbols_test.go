@@ -53,3 +53,20 @@ func TestSourceTickersFromMetadata_readsKnownKeys(t *testing.T) {
 		t.Fatalf("got %v", got)
 	}
 }
+
+func TestSourceTickersFromMetadata_readsRelatedTickers(t *testing.T) {
+	meta := map[string]any{
+		"relatedTickers": []any{"DELL", "MSFT"},
+	}
+	got := SourceTickersFromMetadata(meta)
+	if len(got) != 2 || got[0] != "DELL" || got[1] != "MSFT" {
+		t.Fatalf("got %v", got)
+	}
+}
+
+func TestMergeSourceTickers_dedupesInOrder(t *testing.T) {
+	got := MergeSourceTickers([]string{"DELL"}, []string{"MSFT", "DELL"})
+	if len(got) != 2 || got[0] != "DELL" || got[1] != "MSFT" {
+		t.Fatalf("got %v", got)
+	}
+}

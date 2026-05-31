@@ -17,10 +17,11 @@ import (
 )
 
 type PipelineDeps struct {
-	Store   *store.PipelineStore
-	Cfg     config.Config
-	Finbert *services.FinbertClient
-	Alpaca  *services.AlpacaClient
+	Store      *store.PipelineStore
+	Cfg        config.Config
+	Finbert    *services.FinbertClient
+	Alpaca     *services.AlpacaClient
+	YahooNews  *services.YahooNewsClient
 }
 
 type PipelineInternalHandler struct {
@@ -597,6 +598,23 @@ func (h PipelineInternalHandler) IngestRSS(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	var yahooIndex *services.YahooRelatedTickersIndex
+	if services.IsYahooFinanceRSS(req.FeedURL, req.Source) {
+		yahoo := h.YahooNews
+		if yahoo == nil {
+			yahoo = &services.YahooNewsClient{}
+		}
+		var titleTickers []string
+		for _, item := range feed.Channel.Items {
+			titleTickers = append(titleTickers, services.SourceTickersFromTitle(strings.TrimSpace(item.Title))...)
+		}
+		trending, _ := yahoo.FetchTrendingSymbols(r.Context())
+		querySymbols := services.CollectYahooNewsQuerySymbols(titleTickers, trending)
+		if idx, err := yahoo.BuildYahooRelatedTickersIndex(r.Context(), querySymbols); err == nil {
+			yahooIndex = idx
+		}
+	}
+
 	upserted := 0
 	for _, item := range feed.Channel.Items {
 		if item.Link == "" || item.Title == "" {
@@ -608,9 +626,19 @@ func (h PipelineInternalHandler) IngestRSS(w http.ResponseWriter, r *http.Reques
 				pub = &t
 			} else if t, err := time.Parse(time.RFC1123, item.PubDate); err == nil {
 				pub = &t
+			} else if t, err := time.Parse(time.RFC3339, item.PubDate); err == nil {
+				pub = &t
 			}
 		}
 		title := strings.TrimSpace(item.Title)
+		related := []string(nil)
+		if yahooIndex != nil {
+			related = yahooIndex.Lookup(item.Link, item.GUID, title)
+		}
+		meta := map[string]any{"rss": true}
+		if len(related) > 0 {
+			meta["relatedTickers"] = related
+		}
 		_, err := h.Store.UpsertBacklog(r.Context(), models.NewsBacklogItem{
 			Source:         req.Source,
 			URL:            item.Link,
@@ -618,8 +646,8 @@ func (h PipelineInternalHandler) IngestRSS(w http.ResponseWriter, r *http.Reques
 			Title:          title,
 			PublishedAt:    pub,
 			DiscoveredAt:   time.Now().UTC(),
-			RawSymbolGuess: services.SourceTickersFromTitle(title),
-			Metadata:       map[string]any{"rss": true},
+			RawSymbolGuess: services.RSSSourceTickers(title, related),
+			Metadata:       meta,
 		})
 		if err == nil {
 			upserted++
@@ -630,12 +658,15 @@ func (h PipelineInternalHandler) IngestRSS(w http.ResponseWriter, r *http.Reques
 
 type rssFeed struct {
 	Channel struct {
-		Items []struct {
-			Title   string `xml:"title"`
-			Link    string `xml:"link"`
-			PubDate string `xml:"pubDate"`
-		} `xml:"item"`
+		Items []rssFeedItem `xml:"item"`
 	} `xml:"channel"`
+}
+
+type rssFeedItem struct {
+	Title   string `xml:"title"`
+	Link    string `xml:"link"`
+	PubDate string `xml:"pubDate"`
+	GUID    string `xml:"guid"`
 }
 
 func queryInt(r *http.Request, key string, def int) int {

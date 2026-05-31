@@ -207,6 +207,7 @@ func registerAPIRoutes(r chi.Router, cfg config.Config, pool *pgxpool.Pool) {
 				APIKey:  cfg.FinbertAPIKey,
 			},
 			Alpaca: alpacaClient,
+			YahooNews: &services.YahooNewsClient{},
 		},
 	}
 

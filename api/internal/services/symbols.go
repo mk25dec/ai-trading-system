@@ -49,10 +49,19 @@ func SourceTickersFromMetadata(meta map[string]any) []string {
 		return nil
 	}
 	var out []string
-	for _, key := range []string{"symbols", "tickers", "rawSymbolGuess", "raw_symbol_guess"} {
+	for _, key := range []string{"symbols", "tickers", "relatedTickers", "rawSymbolGuess", "raw_symbol_guess"} {
 		out = append(out, parseTickerList(meta[key])...)
 	}
 	return NormalizeSourceTickers(out)
+}
+
+// MergeSourceTickers deduplicates source-provided ticker lists in order.
+func MergeSourceTickers(lists ...[]string) []string {
+	var merged []string
+	for _, list := range lists {
+		merged = append(merged, list...)
+	}
+	return NormalizeSourceTickers(merged)
 }
 
 func parseTickerList(v any) []string {
