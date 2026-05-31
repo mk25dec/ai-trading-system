@@ -9,30 +9,23 @@ function parseTs(timestamp: string): number {
   return Number.isNaN(ms) ? 0 : ms
 }
 
-function formatAxisLabel(ms: number, intraday: boolean): string {
+function formatAxisLabel(ms: number): string {
   if (!ms) return ""
   const d = new Date(ms)
-  if (intraday) {
-    return d.toLocaleString(undefined, {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    })
-  }
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "2-digit" })
+  return d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
 }
 
-function buildOption(
-  points: PriceChartPoint[],
-  symbol: string,
-  timeframe: string,
-): EChartsOption {
-  const intraday = timeframe === "30Min"
+function buildOption(points: PriceChartPoint[], symbol: string): EChartsOption {
   const actual = points.map((p) => [parseTs(p.timestamp), p.close] as [number, number])
   const predicted = points.map(
     (p) => [parseTs(p.timestamp), p.predictedPrice1 ?? null] as [number, number | null],
   )
+  const singlePoint = points.length === 1
 
   return {
     backgroundColor: "transparent",
@@ -40,7 +33,7 @@ function buildOption(
     grid: { left: 56, right: 24, top: 48, bottom: 56 },
     legend: {
       top: 8,
-      data: ["Actual (close)", "Predicted (formula)"],
+      data: ["Live price", "Predicted (formula)"],
       textStyle: { color: "#64748b", fontSize: 11 },
     },
     tooltip: {
@@ -62,20 +55,20 @@ function buildOption(
             const v = typeof raw === "number" ? raw : Number(raw)
             if (!Number.isFinite(v)) return String(raw ?? "")
             if (params.axisDimension === "y") return `$${v.toFixed(2)}`
-            return formatAxisLabel(v, intraday)
+            return formatAxisLabel(v)
           },
         },
       },
       formatter: (params: unknown) => {
         const items = Array.isArray(params) ? params : [params]
-        const first = items[0] as { dataIndex?: number; axisValue?: number }
+        const first = items[0] as { dataIndex?: number }
         const idx = first?.dataIndex ?? 0
         const pt = points[idx]
         if (!pt) return ""
-        const when = formatAxisLabel(parseTs(pt.timestamp), intraday)
+        const when = formatAxisLabel(parseTs(pt.timestamp))
         const lines = [
           `<div style="font-weight:600;margin-bottom:4px">${symbol} · ${when}</div>`,
-          `Actual: <b>$${pt.close.toFixed(2)}</b>`,
+          `Price: <b>$${pt.close.toFixed(2)}</b>`,
         ]
         if (pt.predictedPrice1 != null) {
           const diff = pt.predictedPrice1 - pt.close
@@ -94,7 +87,7 @@ function buildOption(
         color: "#64748b",
         fontSize: 10,
         hideOverlap: true,
-        formatter: (value: number) => formatAxisLabel(value, intraday),
+        formatter: (value: number) => formatAxisLabel(value),
       },
       axisLine: { lineStyle: { color: "rgba(148,163,184,0.35)" } },
       splitLine: { show: false },
@@ -111,11 +104,12 @@ function buildOption(
     },
     series: [
       {
-        name: "Actual (close)",
+        name: "Live price",
         type: "line",
         data: actual,
-        showSymbol: false,
-        smooth: 0.2,
+        showSymbol: singlePoint,
+        symbolSize: singlePoint ? 10 : 4,
+        smooth: 0.15,
         lineStyle: { width: 2, color: "#3b82f6" },
         itemStyle: { color: "#3b82f6" },
       },
@@ -124,7 +118,7 @@ function buildOption(
         type: "line",
         data: predicted,
         showSymbol: false,
-        smooth: 0.2,
+        smooth: 0.15,
         lineStyle: { width: 2, type: "dashed", color: "#f59e0b" },
         itemStyle: { color: "#f59e0b" },
         connectNulls: false,
@@ -142,13 +136,11 @@ function buildOption(
 export function ActualPredictedChart({
   points,
   symbol,
-  timeframe = "30Min",
   className,
   height = 420,
 }: {
   points: PriceChartPoint[]
   symbol: string
-  timeframe?: string
   className?: string
   height?: number
 }) {
@@ -156,16 +148,16 @@ export function ActualPredictedChart({
   const chartRef = useRef<echarts.ECharts | null>(null)
 
   const render = useCallback(() => {
-    if (!containerRef.current || points.length < 2) return
+    if (!containerRef.current || points.length < 1) return
     if (!chartRef.current) {
       chartRef.current = echarts.init(containerRef.current, undefined, { renderer: "canvas" })
     }
-    chartRef.current.setOption(buildOption(points, symbol, timeframe), {
+    chartRef.current.setOption(buildOption(points, symbol), {
       notMerge: false,
       lazyUpdate: true,
     })
     chartRef.current.resize()
-  }, [points, symbol, timeframe])
+  }, [points, symbol])
 
   useEffect(() => {
     render()
@@ -178,11 +170,7 @@ export function ActualPredictedChart({
     }
   }, [render])
 
-  if (points.length < 2) {
-    const intradayHint =
-      timeframe === "30Min"
-        ? "No 30-minute bars yet — use Sync history on this page (Research Refresh only loads daily bars)."
-        : "No price history — sync Alpaca data for this symbol."
+  if (points.length < 1) {
     return (
       <div
         className={cn(
@@ -191,7 +179,8 @@ export function ActualPredictedChart({
         )}
         style={{ height }}
       >
-        {intradayHint}
+        No live price data — click Sync history, then wait for the next refresh (Alpaca must be
+        configured on the API).
       </div>
     )
   }
@@ -202,7 +191,7 @@ export function ActualPredictedChart({
       className={cn("w-full rounded-xl border bg-card/50", className)}
       style={{ height }}
       role="img"
-      aria-label={`Actual vs predicted price chart for ${symbol}`}
+      aria-label={`Live price chart for ${symbol}`}
     />
   )
 }

@@ -55,8 +55,26 @@ type alpacaBarsResp struct {
 	NextPageToken *string                `json:"next_page_token"`
 }
 
-// ChartIntradayTimeframe is the Alpaca bar size used on the price chart page.
-const ChartIntradayTimeframe = "30Min"
+// ChartIntradayTimeframe is the Alpaca bar size used on the price chart page (real-time).
+const ChartIntradayTimeframe = "1Min"
+
+// LivePriceTick is the latest Alpaca trade used to extend the chart between bar closes.
+type LivePriceTick struct {
+	Timestamp time.Time
+	Price     float64
+}
+
+type alpacaSnapshotsResp map[string]alpacaSnapshotJSON
+
+type alpacaSnapshotJSON struct {
+	LatestTrade *alpacaTrade `json:"latestTrade"`
+	MinuteBar   *alpacaBar   `json:"minuteBar"`
+}
+
+type alpacaTrade struct {
+	T string  `json:"t"`
+	P float64 `json:"p"`
+}
 
 func (a *AlpacaClient) FetchDailyBars(ctx context.Context, symbols []string, days int) ([]models.MarketCandle, error) {
 	return a.FetchBars(ctx, symbols, "1Day", days)
@@ -176,6 +194,82 @@ func (a *AlpacaClient) FetchBars(ctx context.Context, symbols []string, timefram
 	}
 
 	return all, nil
+}
+
+// FetchSnapshots returns latest trade and minute bar per symbol from Alpaca market data.
+func (a *AlpacaClient) FetchSnapshots(ctx context.Context, symbols []string) (map[string]LivePriceTick, []models.MarketCandle, error) {
+	if a.Key == "" || a.Secret == "" {
+		return nil, nil, fmt.Errorf("alpaca credentials not configured")
+	}
+	if len(symbols) == 0 {
+		return map[string]LivePriceTick{}, nil, nil
+	}
+	if a.Client == nil {
+		a.Client = &http.Client{Timeout: 30 * time.Second}
+	}
+	feed := strings.TrimSpace(a.DataFeed)
+	if feed == "" {
+		feed = "iex"
+	}
+	syms := strings.ReplaceAll(strings.Join(symbols, ","), " ", "")
+	q := url.Values{}
+	q.Set("symbols", syms)
+	q.Set("feed", feed)
+	u := fmt.Sprintf("%s/stocks/snapshots?%s", strings.TrimSuffix(a.DataURL, "/"), q.Encode())
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	req.Header.Set("APCA-API-KEY-ID", a.Key)
+	req.Header.Set("APCA-API-SECRET-KEY", a.Secret)
+
+	resp, err := a.Client.Do(req)
+	if err != nil {
+		return nil, nil, err
+	}
+	raw, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		msg := strings.TrimSpace(string(raw))
+		return nil, nil, fmt.Errorf("alpaca snapshots %d: %s", resp.StatusCode, msg)
+	}
+
+	var data alpacaSnapshotsResp
+	if err := json.Unmarshal(raw, &data); err != nil {
+		return nil, nil, err
+	}
+
+	ticks := make(map[string]LivePriceTick, len(symbols))
+	var minuteBars []models.MarketCandle
+	for sym, snap := range data {
+		if snap.MinuteBar != nil && snap.MinuteBar.C > 0 {
+			ts, err := time.Parse(time.RFC3339Nano, snap.MinuteBar.T)
+			if err != nil {
+				ts, _ = time.Parse(time.RFC3339, snap.MinuteBar.T)
+			}
+			minuteBars = append(minuteBars, models.MarketCandle{
+				Symbol:    sym,
+				Timeframe: ChartIntradayTimeframe,
+				Timestamp: ts,
+				Open:      snap.MinuteBar.O,
+				High:      snap.MinuteBar.H,
+				Low:       snap.MinuteBar.L,
+				Close:     snap.MinuteBar.C,
+				Volume:    int64(snap.MinuteBar.V),
+				Source:    "alpaca",
+			})
+		}
+		if snap.LatestTrade != nil && snap.LatestTrade.P > 0 {
+			ts, err := time.Parse(time.RFC3339Nano, snap.LatestTrade.T)
+			if err != nil {
+				ts, _ = time.Parse(time.RFC3339, snap.LatestTrade.T)
+			}
+			ticks[sym] = LivePriceTick{Timestamp: ts, Price: snap.LatestTrade.P}
+		}
+	}
+	return ticks, minuteBars, nil
 }
 
 // tradingBaseURLs returns Alpaca trading API bases to try (paper vs live).

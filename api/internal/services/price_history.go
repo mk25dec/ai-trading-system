@@ -5,23 +5,19 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"time"
 
+	"github.com/joeydekruis/ai-trading-system/api/internal/models"
 	"github.com/joeydekruis/ai-trading-system/api/internal/store"
 )
 
-// AlpacaWatchlistHistoryDays is max daily history fetched for chart backfill.
-const AlpacaWatchlistHistoryDays = 1095
+// AlpacaIntradayHistoryDays is lookback for 1Min bars on full chart sync.
+const AlpacaIntradayHistoryDays = 5
 
-// AlpacaIntradayHistoryDays is lookback for 30Min bars on the price chart.
-const AlpacaIntradayHistoryDays = 60
+// ChartLiveRefreshDays is lookback when polling Alpaca for live 1Min updates.
+const ChartLiveRefreshDays = 1
 
-// ChartLiveRefreshDays30Min is lookback when polling Alpaca for live intraday updates.
-const ChartLiveRefreshDays30Min = 3
-
-// ChartLiveRefreshDaysDaily is lookback when polling Alpaca for live daily updates.
-const ChartLiveRefreshDaysDaily = 7
-
-// SyncWatchlistPriceHistory fetches Alpaca daily + 30Min bars and backfills predicted_price1.
+// SyncWatchlistPriceHistory fetches Alpaca 1Min bars and backfills predicted_price1.
 func SyncWatchlistPriceHistory(
 	ctx context.Context,
 	st *store.PipelineStore,
@@ -38,31 +34,17 @@ func SyncWatchlistPriceHistory(
 		return 0, 0, err
 	}
 
-	daily, err := alpaca.FetchBars(ctx, symbols, "1Day", AlpacaWatchlistHistoryDays)
+	bars, err := alpaca.FetchBars(ctx, symbols, ChartIntradayTimeframe, AlpacaIntradayHistoryDays)
 	if err != nil {
 		return 0, 0, err
 	}
-	candlesFetched = len(daily)
-	if _, err := st.UpsertCandles(ctx, daily); err != nil {
+	candlesFetched = len(bars)
+	if _, err := st.UpsertCandles(ctx, bars); err != nil {
 		return candlesFetched, 0, err
 	}
 
-	intraday, err := alpaca.FetchBars(ctx, symbols, ChartIntradayTimeframe, AlpacaIntradayHistoryDays)
-	if err != nil {
-		return candlesFetched, predictionsUpdated, fmt.Errorf("intraday: %w", err)
-	}
-	candlesFetched += len(intraday)
-	if _, err := st.UpsertCandles(ctx, intraday); err != nil {
-		return candlesFetched, predictionsUpdated, err
-	}
-
 	for _, sym := range symbols {
-		n, err := BackfillSymbolPredictions(ctx, st, sym, "1Day")
-		if err != nil {
-			return candlesFetched, predictionsUpdated, fmt.Errorf("%s daily: %w", sym, err)
-		}
-		predictionsUpdated += n
-		n, err = BackfillSymbolPredictions(ctx, st, sym, ChartIntradayTimeframe)
+		n, err := BackfillSymbolPredictions(ctx, st, sym, ChartIntradayTimeframe)
 		if err != nil {
 			return candlesFetched, predictionsUpdated, fmt.Errorf("%s %s: %w", sym, ChartIntradayTimeframe, err)
 		}
@@ -71,42 +53,72 @@ func SyncWatchlistPriceHistory(
 	return candlesFetched, predictionsUpdated, nil
 }
 
-// RefreshSymbolChartBars fetches recent Alpaca bars for one watchlist symbol/timeframe,
-// upserts OHLCV (including the forming bar), and recomputes predicted_price1.
-func RefreshSymbolChartBars(
+// RefreshSymbolLiveChart pulls recent 1Min bars plus Alpaca snapshot trade for real-time charting.
+func RefreshSymbolLiveChart(
 	ctx context.Context,
 	st *store.PipelineStore,
 	alpaca *AlpacaClient,
-	symbol, timeframe string,
-) (candlesFetched, predictionsUpdated int, err error) {
+	symbol string,
+) (*LivePriceTick, error) {
 	if alpaca == nil || alpaca.Key == "" {
-		return 0, 0, fmt.Errorf("alpaca credentials not configured")
+		return nil, fmt.Errorf("alpaca credentials not configured")
 	}
 	symbol = strings.ToUpper(strings.TrimSpace(symbol))
 	if symbol == "" {
-		return 0, 0, fmt.Errorf("symbol required")
+		return nil, fmt.Errorf("symbol required")
 	}
-	timeframe = strings.TrimSpace(timeframe)
-	if timeframe == "" {
-		timeframe = ChartIntradayTimeframe
+
+	bars, err := alpaca.FetchBars(ctx, []string{symbol}, ChartIntradayTimeframe, ChartLiveRefreshDays)
+	if err == nil && len(bars) > 0 {
+		_, _ = st.UpsertCandles(ctx, bars)
 	}
-	days := ChartLiveRefreshDaysDaily
-	if timeframe == ChartIntradayTimeframe {
-		days = ChartLiveRefreshDays30Min
-	}
-	bars, err := alpaca.FetchBars(ctx, []string{symbol}, timeframe, days)
-	if err != nil {
-		if strings.Contains(err.Error(), "returned 0") {
-			n, predErr := BackfillSymbolPredictions(ctx, st, symbol, timeframe)
-			return 0, n, predErr
+
+	ticks, minuteBars, snapErr := alpaca.FetchSnapshots(ctx, []string{symbol})
+	if snapErr != nil {
+		if err != nil {
+			return nil, fmt.Errorf("bars: %v; snapshots: %w", err, snapErr)
 		}
-		return 0, 0, err
+		return nil, snapErr
 	}
-	if _, err := st.UpsertCandles(ctx, bars); err != nil {
-		return 0, 0, err
+	if len(minuteBars) > 0 {
+		_, _ = st.UpsertCandles(ctx, minuteBars)
 	}
-	n, err := BackfillSymbolPredictions(ctx, st, symbol, timeframe)
-	return len(bars), n, err
+
+	tick := ticks[symbol]
+	if tick.Price <= 0 {
+		return nil, nil
+	}
+	cp := tick
+	return &cp, nil
+}
+
+// MergeLiveChartPoint appends or updates the series with the latest trade price.
+func MergeLiveChartPoint(points []models.PriceChartPoint, tick *LivePriceTick) []models.PriceChartPoint {
+	if tick == nil || tick.Price <= 0 || tick.Timestamp.IsZero() {
+		return points
+	}
+	if len(points) == 0 {
+		return []models.PriceChartPoint{{
+			Timestamp: tick.Timestamp,
+			Close:     tick.Price,
+		}}
+	}
+	out := append([]models.PriceChartPoint(nil), points...)
+	last := out[len(out)-1]
+	lastMinute := last.Timestamp.UTC().Truncate(time.Minute)
+	tickMinute := tick.Timestamp.UTC().Truncate(time.Minute)
+	if tickMinute.Equal(lastMinute) {
+		out[len(out)-1].Close = tick.Price
+		out[len(out)-1].Timestamp = tick.Timestamp
+		return out
+	}
+	if tick.Timestamp.After(last.Timestamp) {
+		out = append(out, models.PriceChartPoint{
+			Timestamp: tick.Timestamp,
+			Close:     tick.Price,
+		})
+	}
+	return out
 }
 
 // BackfillSymbolPredictions recomputes predicted_price1 for alpaca rows of a symbol/timeframe.

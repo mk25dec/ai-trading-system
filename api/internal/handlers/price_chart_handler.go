@@ -20,43 +20,14 @@ type PriceChartHandler struct {
 }
 
 func (h PriceChartHandler) GetSeries(w http.ResponseWriter, r *http.Request) {
-	workspaceID := chi.URLParam(r, "id")
-	user := middleware.UserFromContext(r.Context())
-	if !h.canAccessWorkspace(r, workspaceID, user) {
-		WriteError(w, http.StatusForbidden, "access denied")
-		return
-	}
-	symbol := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("symbol")))
-	if symbol == "" {
-		WriteError(w, http.StatusBadRequest, "symbol query required")
-		return
-	}
-	ok, err := watchlistContainsSymbol(r.Context(), h.Store, workspaceID, symbol)
-	if err != nil {
-		WriteError(w, http.StatusInternalServerError, "watchlist check failed")
-		return
-	}
-	if !ok {
-		WriteError(w, http.StatusForbidden, "symbol not on workspace watchlist")
-		return
-	}
-	timeframe := normalizeChartTimeframe(r.URL.Query().Get("timeframe"))
-	points, err := h.Store.ListPriceChartPoints(r.Context(), symbol, timeframe)
-	if err != nil {
-		WriteError(w, http.StatusInternalServerError, "chart query failed")
-		return
-	}
-	if points == nil {
-		points = []models.PriceChartPoint{}
-	}
-	writeJSON(w, http.StatusOK, models.PriceChartSeries{
-		Symbol:    symbol,
-		Timeframe: timeframe,
-		Points:    points,
-	})
+	h.respondSeries(w, r, false)
 }
 
 func (h PriceChartHandler) GetLiveSeries(w http.ResponseWriter, r *http.Request) {
+	h.respondSeries(w, r, true)
+}
+
+func (h PriceChartHandler) respondSeries(w http.ResponseWriter, r *http.Request, live bool) {
 	workspaceID := chi.URLParam(r, "id")
 	user := middleware.UserFromContext(r.Context())
 	if !h.canAccessWorkspace(r, workspaceID, user) {
@@ -77,13 +48,14 @@ func (h PriceChartHandler) GetLiveSeries(w http.ResponseWriter, r *http.Request)
 		WriteError(w, http.StatusForbidden, "symbol not on workspace watchlist")
 		return
 	}
-	timeframe := normalizeChartTimeframe(r.URL.Query().Get("timeframe"))
-	if h.Alpaca != nil && h.Alpaca.Key != "" {
-		if _, _, err := services.RefreshSymbolChartBars(r.Context(), h.Store, h.Alpaca, symbol, timeframe); err != nil {
-			WriteError(w, http.StatusBadGateway, "alpaca refresh failed: "+err.Error())
-			return
-		}
+
+	timeframe := services.ChartIntradayTimeframe
+	var tick *services.LivePriceTick
+	var refreshErr error
+	if live && h.Alpaca != nil && h.Alpaca.Key != "" {
+		tick, refreshErr = services.RefreshSymbolLiveChart(r.Context(), h.Store, h.Alpaca, symbol)
 	}
+
 	points, err := h.Store.ListPriceChartPoints(r.Context(), symbol, timeframe)
 	if err != nil {
 		WriteError(w, http.StatusInternalServerError, "chart query failed")
@@ -92,24 +64,26 @@ func (h PriceChartHandler) GetLiveSeries(w http.ResponseWriter, r *http.Request)
 	if points == nil {
 		points = []models.PriceChartPoint{}
 	}
-	now := time.Now().UTC()
-	writeJSON(w, http.StatusOK, models.PriceChartSeries{
-		Symbol:      symbol,
-		Timeframe:   timeframe,
-		Points:      points,
-		RefreshedAt: &now,
-	})
-}
-
-func normalizeChartTimeframe(raw string) string {
-	switch strings.ToUpper(strings.TrimSpace(raw)) {
-	case "1DAY", "DAILY", "DAY":
-		return "1Day"
-	case "30MIN", "30M", "INTRADAY":
-		return services.ChartIntradayTimeframe
-	default:
-		return services.ChartIntradayTimeframe
+	if live && tick == nil && refreshErr != nil && len(points) == 0 {
+		WriteError(w, http.StatusBadGateway, "alpaca refresh failed: "+refreshErr.Error())
+		return
 	}
+	points = services.MergeLiveChartPoint(points, tick)
+
+	series := models.PriceChartSeries{
+		Symbol:    symbol,
+		Timeframe: timeframe,
+		Points:    points,
+	}
+	if tick != nil && tick.Price > 0 {
+		p := tick.Price
+		series.LatestPrice = &p
+	}
+	if live {
+		now := time.Now().UTC()
+		series.RefreshedAt = &now
+	}
+	writeJSON(w, http.StatusOK, series)
 }
 
 func (h PriceChartHandler) Sync(w http.ResponseWriter, r *http.Request) {

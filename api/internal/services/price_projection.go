@@ -12,12 +12,12 @@ const (
 	PriceProjectionMinBars = 8
 	// PriceProjectionHorizonDays matches web PROJECTION_HORIZONS 1M (21 trading days).
 	PriceProjectionHorizonDays = 21
-	// IntradayBarsPerSession approx 30Min bars in a 6.5h US session.
-	IntradayBarsPerSession = 13
-	// PriceProjectionIntradayMinBars minimum 30Min bars before predicting.
-	PriceProjectionIntradayMinBars = 20
-	// PriceProjectionIntradayHorizonDays one 30Min bar forward as fraction of a session day.
-	PriceProjectionIntradayHorizonDays = 0.5 / 6.5
+	// IntradayBarsPerSession approx 1Min bars in a 6.5h US session.
+	IntradayBarsPerSession = 390
+	// PriceProjectionIntradayMinBars minimum 1Min bars before predicting.
+	PriceProjectionIntradayMinBars = 60
+	// PriceProjectionIntradayHorizonDays one 1Min bar forward as fraction of a session day.
+	PriceProjectionIntradayHorizonDays = (1.0 / 60.0) / 6.5
 )
 
 // PredictedPrice1 computes the Sprint D center price for a forward horizon using the
@@ -112,7 +112,7 @@ func finbertEdgeForProjection(nf *models.NewsFeatures) float64 {
 }
 
 // BackfillPredictedPrices walks bars oldest-first and sets predicted_price1 per row (walk-forward).
-// timeframe "30Min" uses one-bar-forward horizon; "1Day" (default) uses 21-day center.
+// timeframe ChartIntradayTimeframe (1Min) uses one-bar-forward horizon; "1Day" uses 21-day center.
 func BackfillPredictedPrices(asc []models.MarketCandle, nf *models.NewsFeatures, timeframe string) []float64 {
 	if len(asc) == 0 {
 		return nil

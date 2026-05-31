@@ -14,12 +14,10 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useWorkspace } from "@/hooks/use-workspace"
-import { pipelineApi, type PriceChartTimeframe } from "@/lib/pipeline-api"
+import { pipelineApi } from "@/lib/pipeline-api"
 
-const LIVE_POLL_MS: Record<PriceChartTimeframe, number> = {
-  "30Min": 30_000,
-  "1Day": 5 * 60_000,
-}
+/** Poll Alpaca snapshots + 1Min bars for near real-time prices. */
+const LIVE_POLL_MS = 5_000
 
 function formatRefreshedAt(iso?: string): string | null {
   if (!iso) return null
@@ -32,7 +30,6 @@ export function ChartPage() {
   const queryClient = useQueryClient()
   const { workspaceId, selectWorkspace, workspaces } = useWorkspace()
   const [symbol, setSymbol] = useState("")
-  const [timeframe, setTimeframe] = useState<PriceChartTimeframe>("30Min")
 
   const watchlist = useQuery({
     queryKey: ["watchlist", workspaceId],
@@ -55,10 +52,10 @@ export function ChartPage() {
   }, [symbol, symbols])
 
   const series = useQuery({
-    queryKey: ["price-chart-live", workspaceId, symbol, timeframe],
-    queryFn: () => pipelineApi.priceChartLive(workspaceId, symbol, timeframe),
+    queryKey: ["price-chart-live", workspaceId, symbol],
+    queryFn: () => pipelineApi.priceChartLive(workspaceId, symbol),
     enabled: !!workspaceId && !!symbol,
-    refetchInterval: LIVE_POLL_MS[timeframe],
+    refetchInterval: LIVE_POLL_MS,
     refetchIntervalInBackground: true,
     placeholderData: (prev) => prev,
   })
@@ -78,9 +75,8 @@ export function ChartPage() {
   })
 
   const withPred = series.data?.points.filter((p) => p.predictedPrice1 != null).length ?? 0
-  const tfLabel = timeframe === "30Min" ? "30-minute" : "daily"
   const refreshedLabel = formatRefreshedAt(series.data?.refreshedAt)
-  const pollSeconds = LIVE_POLL_MS[timeframe] / 1000
+  const latest = series.data?.latestPrice
 
   return (
     <div className="space-y-6">
@@ -88,10 +84,11 @@ export function ChartPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Price chart</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Watchlist symbols only. Live Alpaca <span className="font-medium text-foreground">30Min</span>{" "}
-            bars refresh every {pollSeconds}s (daily every 5 min) with walk-forward{" "}
-            <span className="font-medium text-foreground">predicted_price1</span>. Use Sync history once
-            for full backfill (~60 days intraday, ~3 years daily).
+            Watchlist symbols only. Real-time Alpaca{" "}
+            <span className="font-medium text-foreground">1-minute</span> bars plus latest trade,
+            refreshed every 5 seconds. Run{" "}
+            <span className="font-medium text-foreground">Sync history</span> once for ~5 days of
+            backfill and walk-forward <span className="font-medium text-foreground">predicted_price1</span>.
           </p>
         </div>
         <WorkspaceToolbar
@@ -110,8 +107,9 @@ export function ChartPage() {
             <CardTitle className="text-base">Actual vs predicted</CardTitle>
             <CardDescription className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <span>
-                {series.data?.points.length ?? 0} {tfLabel} bars
-                {withPred > 0 ? ` · ${withPred} with prediction` : " · run Sync to backfill"}
+                {series.data?.points.length ?? 0} minute bars
+                {latest != null ? ` · last $${latest.toFixed(2)}` : ""}
+                {withPred > 0 ? ` · ${withPred} with prediction` : " · run Sync to backfill predictions"}
               </span>
               {refreshedLabel ? (
                 <span className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
@@ -128,18 +126,6 @@ export function ChartPage() {
             </CardDescription>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Select
-              value={timeframe}
-              onValueChange={(v) => setTimeframe((v as PriceChartTimeframe) ?? "30Min")}
-            >
-              <SelectTrigger className="w-[120px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="30Min">30 minute</SelectItem>
-                <SelectItem value="1Day">Daily</SelectItem>
-              </SelectContent>
-            </Select>
             <Select
               value={symbol}
               onValueChange={(v) => setSymbol(v ?? "")}
@@ -180,7 +166,6 @@ export function ChartPage() {
             <ActualPredictedChart
               points={series.data?.points ?? []}
               symbol={symbol}
-              timeframe={series.data?.timeframe ?? timeframe}
               height={440}
             />
           )}
