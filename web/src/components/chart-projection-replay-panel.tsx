@@ -1,5 +1,6 @@
 import { X } from "lucide-react"
 import type { PriceChartProjectionReplay } from "@/lib/pipeline-api"
+import { formatChartDateTime } from "@/lib/chart-time"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
@@ -13,14 +14,7 @@ function fmtPct(v: number, signed = false): string {
 }
 
 function fmtWhen(iso: string): string {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso
-  return d.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  })
+  return formatChartDateTime(iso)
 }
 
 function Stat({

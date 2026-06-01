@@ -20,21 +20,19 @@ import {
 import { useWorkspace } from "@/hooks/use-workspace"
 import type { ChartSelectionAnalysis } from "@/lib/chart-selection-analysis"
 import { pipelineApi, type PriceChartPoint, type PriceChartProjectionReplay } from "@/lib/pipeline-api"
+import {
+  chartPointsTimeRange,
+  formatChartTimeShort,
+  parseChartTimestamp,
+} from "@/lib/chart-time"
 
 /** Live price ticker — Alpaca refresh, no chart flicker. */
 const LIVE_PRICE_POLL_MS = 120_000
 
-function formatRefreshedAt(iso?: string): string | null {
-  if (!iso) return null
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return null
-  return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" })
-}
-
 function parseAnchorMs(iso?: string): number | null {
   if (!iso) return null
-  const ms = new Date(iso).getTime()
-  return Number.isNaN(ms) ? null : ms
+  const ms = parseChartTimestamp(iso)
+  return ms || null
 }
 
 export function ChartPage() {
@@ -94,8 +92,11 @@ export function ChartPage() {
   const refreshAnalysis = useMutation({
     mutationFn: () => pipelineApi.priceChartLive(workspaceId, symbol),
     onSuccess: (data) => {
-      queryClient.setQueryData(["price-chart-analysis", workspaceId, symbol], data)
-      toast.success("Analysis chart updated")
+      const keyAnalysis = ["price-chart-analysis", workspaceId, symbol] as const
+      const keyLive = ["price-chart-live-ticker", workspaceId, symbol] as const
+      queryClient.setQueryData(keyAnalysis, data)
+      queryClient.setQueryData(keyLive, data)
+      toast.success("Charts updated from feed (UTC bar times)")
     },
     onError: (e: Error) => toast.error(e.message),
   })
@@ -129,13 +130,15 @@ export function ChartPage() {
     refreshAnalysis.mutate()
   }
 
-  const liveRefreshedLabel = formatRefreshedAt(liveSeries.data?.refreshedAt)
+  const liveRefreshedLabel = formatChartTimeShort(liveSeries.data?.refreshedAt)
   const liveLatest = liveSeries.data?.latestPrice
-  const analysisRefreshedLabel = formatRefreshedAt(analysisSeries.data?.refreshedAt)
+  const liveRange = chartPointsTimeRange(liveSeries.data?.points ?? [])
+  const analysisPoints = analysisSeries.data?.points ?? []
+  const analysisRefreshedLabel = formatChartTimeShort(analysisSeries.data?.refreshedAt)
+  const analysisRange = chartPointsTimeRange(analysisPoints)
   const withPred =
     analysisSeries.data?.points.filter((p) => p.predictedPrice1 != null).length ?? 0
   const highlightAnchorMs = parseAnchorMs(replayProjection?.anchor.timestamp)
-  const analysisPoints = analysisSeries.data?.points ?? []
 
   const clearReplay = () => {
     setReplayProjection(null)
@@ -150,8 +153,8 @@ export function ChartPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Price chart</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Live price updates every 2 minutes in its own chart. Analysis and replay charts refresh
-            only when you click Refresh — they won&apos;t jump while you inspect projections.
+            Bar timestamps match the Alpaca feed (UTC). Live price updates every 2 minutes; analysis
+            and replay refresh only when you click Refresh chart.
           </p>
         </div>
         <WorkspaceToolbar
@@ -196,15 +199,16 @@ export function ChartPage() {
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Live price</CardTitle>
           <CardDescription className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span>Real-time 1-minute bars — auto-refresh every 2 minutes</span>
+            <span>Real-time 1-minute bars (UTC) — auto-refresh every 2 minutes</span>
             {liveLatest != null ? (
               <span className="font-mono font-medium text-foreground">
                 · ${liveLatest.toFixed(2)}
               </span>
             ) : null}
+            {liveRange ? <span className="text-muted-foreground">· {liveRange}</span> : null}
             {liveRefreshedLabel ? (
               <span className="text-emerald-600 dark:text-emerald-400">
-                · updated {liveRefreshedLabel}
+                · feed {liveRefreshedLabel}
               </span>
             ) : null}
           </CardDescription>
@@ -234,13 +238,14 @@ export function ChartPage() {
             <CardTitle className="text-base">Actual vs predicted</CardTitle>
             <CardDescription className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <span>
-                {analysisPoints.length} minute bars
+                {analysisPoints.length} minute bars (UTC)
                 {withPred > 0 ? ` · ${withPred} with prediction` : " · run Sync to backfill predictions"}
               </span>
+              {analysisRange ? (
+                <span className="text-muted-foreground">· {analysisRange}</span>
+              ) : null}
               {analysisRefreshedLabel ? (
-                <span className="text-muted-foreground">
-                  · snapshot {analysisRefreshedLabel}
-                </span>
+                <span className="text-muted-foreground">· snapshot {analysisRefreshedLabel}</span>
               ) : null}
             </CardDescription>
           </div>

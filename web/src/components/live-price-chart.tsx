@@ -2,22 +2,15 @@ import { useCallback, useEffect, useRef } from "react"
 import type { EChartsOption } from "echarts"
 import * as echarts from "echarts"
 import type { PriceChartPoint } from "@/lib/pipeline-api"
+import { formatChartAxisTime, parseChartTimestamp } from "@/lib/chart-time"
 import { cn } from "@/lib/utils"
 
 function parseTs(timestamp: string): number {
-  const ms = new Date(timestamp).getTime()
-  return Number.isNaN(ms) ? 0 : ms
+  return parseChartTimestamp(timestamp)
 }
 
 function formatAxisLabel(ms: number): string {
-  if (!ms) return ""
-  const d = new Date(ms)
-  return d.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  })
+  return formatChartAxisTime(ms)
 }
 
 function buildOption(symbol: string, data: [number, number][]): EChartsOption {
@@ -191,7 +184,7 @@ export function LivePriceChart({
         aria-label={`Live price for ${symbol}`}
       />
       <p className="text-xs text-muted-foreground">
-        Updates every 2 minutes. Price line refreshes in place without redrawing the whole chart.
+        Updates every 2 minutes from Alpaca. Axis labels are UTC, same as the source feed.
       </p>
     </div>
   )

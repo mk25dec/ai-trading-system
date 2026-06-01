@@ -1,4 +1,5 @@
 import type { PriceChartPoint } from "@/lib/pipeline-api"
+import { parseChartTimestamp } from "@/lib/chart-time"
 
 export type ChartTrend = "up" | "down" | "flat"
 
@@ -20,8 +21,7 @@ export interface ChartSelectionAnalysis {
 }
 
 function parseMs(timestamp: string): number {
-  const ms = new Date(timestamp).getTime()
-  return Number.isNaN(ms) ? 0 : ms
+  return parseChartTimestamp(timestamp)
 }
 
 function trendFromChangePct(pct: number): ChartTrend {

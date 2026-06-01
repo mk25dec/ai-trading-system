@@ -2,22 +2,15 @@ import { useCallback, useEffect, useMemo, useRef } from "react"
 import type { EChartsOption } from "echarts"
 import * as echarts from "echarts"
 import type { PriceChartPoint, PriceChartProjectionReplay } from "@/lib/pipeline-api"
+import { formatChartAxisTime, parseChartTimestamp } from "@/lib/chart-time"
 import { cn } from "@/lib/utils"
 
 function parseTs(timestamp: string): number {
-  const ms = new Date(timestamp).getTime()
-  return Number.isNaN(ms) ? 0 : ms
+  return parseChartTimestamp(timestamp)
 }
 
 function formatAxisLabel(ms: number): string {
-  if (!ms) return ""
-  const d = new Date(ms)
-  return d.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  })
+  return formatChartAxisTime(ms)
 }
 
 const PAD_MS = 6 * 60 * 60 * 1000
@@ -295,8 +288,8 @@ export function ProjectionReplayChart({
         aria-label={`Projection replay chart for ${symbol}`}
       />
       <p className="text-xs text-muted-foreground">
-        Blue is what actually happened. Purple dashed is what the formula predicted from the anchor.
-        Compare the purple end point to the green <span className="font-medium">Actual +3D</span> marker.
+        Blue is actual price (UTC). Purple dashed is the formula projection from the anchor. Compare
+        purple end to the green Actual +3D marker.
       </p>
     </div>
   )

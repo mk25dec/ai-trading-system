@@ -6,22 +6,15 @@ import {
   analyzeChartSelection,
   type ChartSelectionAnalysis,
 } from "@/lib/chart-selection-analysis"
+import { formatChartAxisTime, parseChartTimestamp } from "@/lib/chart-time"
 import { cn } from "@/lib/utils"
 
 function parseTs(timestamp: string): number {
-  const ms = new Date(timestamp).getTime()
-  return Number.isNaN(ms) ? 0 : ms
+  return parseChartTimestamp(timestamp)
 }
 
 function formatAxisLabel(ms: number): string {
-  if (!ms) return ""
-  const d = new Date(ms)
-  return d.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  })
+  return formatChartAxisTime(ms)
 }
 
 function buildOption(
@@ -434,8 +427,8 @@ export function ActualPredictedChart({
       />
       <p className="text-xs text-muted-foreground">
         {replayMode
-          ? "Pick mode: click the blue live price line to choose a past time — the replay chart below will show projected vs actual."
-          : "Drag on the chart (line-X brush) to select a range for stats. Purple dashed is the live +3D forward projection from now."}
+          ? "Pick mode: click the blue line on the analysis chart below — timestamps are UTC (feed time)."
+          : "Drag to select a range. Purple dashed is +3D projection from the latest bar (UTC)."}
         {" "}
         Scroll or use the slider to zoom; double-click to reset.
       </p>
