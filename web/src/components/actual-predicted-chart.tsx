@@ -55,6 +55,7 @@ function buildOption(
   return {
     backgroundColor: "transparent",
     animationDuration: 280,
+    animationDurationUpdate: 0,
     grid: { left: 56, right: 24, top: 48, bottom: 88 },
     toolbox: {
       right: 12,
@@ -365,6 +366,7 @@ export function ActualPredictedChart({
     chartRef.current.setOption(buildOption(points, forwardPoints, symbol, highlightAnchorMs), {
       notMerge: false,
       lazyUpdate: true,
+      silent: true,
     })
     bindClick(chartRef.current)
     restoreBrush(chartRef.current)

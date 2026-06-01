@@ -5,6 +5,7 @@ import { toast } from "sonner"
 import { ActualPredictedChart } from "@/components/actual-predicted-chart"
 import { ChartProjectionReplayPanel } from "@/components/chart-projection-replay-panel"
 import { ChartSelectionAnalysisPanel } from "@/components/chart-selection-analysis-panel"
+import { LivePriceChart } from "@/components/live-price-chart"
 import { ProjectionReplayChart } from "@/components/projection-replay-chart"
 import { WorkspaceToolbar } from "@/components/workspace-toolbar"
 import { Button } from "@/components/ui/button"
@@ -20,8 +21,8 @@ import { useWorkspace } from "@/hooks/use-workspace"
 import type { ChartSelectionAnalysis } from "@/lib/chart-selection-analysis"
 import { pipelineApi, type PriceChartPoint, type PriceChartProjectionReplay } from "@/lib/pipeline-api"
 
-/** Poll Alpaca snapshots + 1Min bars for near real-time prices. */
-const LIVE_POLL_MS = 5_000
+/** Live price ticker — Alpaca refresh, no chart flicker. */
+const LIVE_PRICE_POLL_MS = 120_000
 
 function formatRefreshedAt(iso?: string): string | null {
   if (!iso) return null
@@ -72,6 +73,33 @@ export function ChartPage() {
     setPickMode(false)
   }, [symbol])
 
+  const liveSeries = useQuery({
+    queryKey: ["price-chart-live-ticker", workspaceId, symbol],
+    queryFn: () => pipelineApi.priceChartLive(workspaceId, symbol),
+    enabled: !!workspaceId && !!symbol,
+    refetchInterval: LIVE_PRICE_POLL_MS,
+    refetchIntervalInBackground: true,
+    placeholderData: (prev) => prev,
+    staleTime: LIVE_PRICE_POLL_MS - 5_000,
+  })
+
+  const analysisSeries = useQuery({
+    queryKey: ["price-chart-analysis", workspaceId, symbol],
+    queryFn: () => pipelineApi.priceChart(workspaceId, symbol),
+    enabled: !!workspaceId && !!symbol,
+    placeholderData: (prev) => prev,
+    staleTime: Infinity,
+  })
+
+  const refreshAnalysis = useMutation({
+    mutationFn: () => pipelineApi.priceChartLive(workspaceId, symbol),
+    onSuccess: (data) => {
+      queryClient.setQueryData(["price-chart-analysis", workspaceId, symbol], data)
+      toast.success("Analysis chart updated")
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
   const projectionReplay = useMutation({
     mutationFn: (anchor: PriceChartPoint) =>
       pipelineApi.priceChartProjectionReplay(workspaceId, symbol, anchor.timestamp),
@@ -82,19 +110,11 @@ export function ChartPage() {
     onError: (e: Error) => toast.error(e.message),
   })
 
-  const series = useQuery({
-    queryKey: ["price-chart-live", workspaceId, symbol],
-    queryFn: () => pipelineApi.priceChartLive(workspaceId, symbol),
-    enabled: !!workspaceId && !!symbol,
-    refetchInterval: LIVE_POLL_MS,
-    refetchIntervalInBackground: true,
-    placeholderData: (prev) => prev,
-  })
-
   const sync = useMutation({
     mutationFn: () => pipelineApi.syncPriceChart(workspaceId),
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["price-chart-live", workspaceId] })
+      void queryClient.invalidateQueries({ queryKey: ["price-chart-live-ticker", workspaceId] })
+      void queryClient.invalidateQueries({ queryKey: ["price-chart-analysis", workspaceId] })
       toast.success(
         `Synced ${data.symbolsProcessed} symbols — ${data.candlesFetched} bars, ${data.predictionsUpdated} predictions`,
       )
@@ -105,15 +125,24 @@ export function ChartPage() {
     onError: (e: Error) => toast.error(e.message),
   })
 
-  const withPred = series.data?.points.filter((p) => p.predictedPrice1 != null).length ?? 0
-  const refreshedLabel = formatRefreshedAt(series.data?.refreshedAt)
-  const latest = series.data?.latestPrice
+  const refreshAnalysisChart = () => {
+    refreshAnalysis.mutate()
+  }
+
+  const liveRefreshedLabel = formatRefreshedAt(liveSeries.data?.refreshedAt)
+  const liveLatest = liveSeries.data?.latestPrice
+  const analysisRefreshedLabel = formatRefreshedAt(analysisSeries.data?.refreshedAt)
+  const withPred =
+    analysisSeries.data?.points.filter((p) => p.predictedPrice1 != null).length ?? 0
   const highlightAnchorMs = parseAnchorMs(replayProjection?.anchor.timestamp)
+  const analysisPoints = analysisSeries.data?.points ?? []
 
   const clearReplay = () => {
     setReplayProjection(null)
     setPickMode(false)
   }
+
+  const chartBusy = symbols.length === 0
 
   return (
     <div className="space-y-6">
@@ -121,9 +150,8 @@ export function ChartPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Price chart</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Live 1-minute prices with walk-forward predictions on top. Use the separate replay
-            chart below to inspect how the +3D formula would have looked at any past moment vs
-            what actually happened.
+            Live price updates every 2 minutes in its own chart. Analysis and replay charts refresh
+            only when you click Refresh — they won&apos;t jump while you inspect projections.
           </p>
         </div>
         <WorkspaceToolbar
@@ -136,72 +164,110 @@ export function ChartPage() {
         />
       </div>
 
-      <Card>
-        <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <CardTitle className="text-base">Live chart</CardTitle>
-            <CardDescription className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <span>
-                {series.data?.points.length ?? 0} minute bars
-                {latest != null ? ` · last $${latest.toFixed(2)}` : ""}
-                {withPred > 0 ? ` · ${withPred} with prediction` : " · run Sync to backfill predictions"}
+      <div className="flex flex-wrap items-center gap-2">
+        <Select
+          value={symbol}
+          onValueChange={(v) => setSymbol(v ?? "")}
+          disabled={chartBusy}
+        >
+          <SelectTrigger className="w-[140px]">
+            <SelectValue placeholder="Symbol" />
+          </SelectTrigger>
+          <SelectContent>
+            {symbols.map((s) => (
+              <SelectItem key={s} value={s}>
+                {s}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={!workspaceId || sync.isPending}
+          onClick={() => sync.mutate()}
+        >
+          <RefreshCw className={sync.isPending ? "size-4 animate-spin" : "size-4"} />
+          Sync history
+        </Button>
+      </div>
+
+      <Card className="border-emerald-500/20">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Live price</CardTitle>
+          <CardDescription className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span>Real-time 1-minute bars — auto-refresh every 2 minutes</span>
+            {liveLatest != null ? (
+              <span className="font-mono font-medium text-foreground">
+                · ${liveLatest.toFixed(2)}
               </span>
-              {refreshedLabel ? (
-                <span className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
-                  <span className="relative flex size-2">
-                    <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-                    <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
-                  </span>
-                  Live · updated {refreshedLabel}
-                </span>
-              ) : null}
-              {series.isFetching && !series.isLoading ? (
-                <span className="text-muted-foreground">Refreshing…</span>
-              ) : null}
-            </CardDescription>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Select
-              value={symbol}
-              onValueChange={(v) => setSymbol(v ?? "")}
-              disabled={symbols.length === 0}
-            >
-              <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="Symbol" />
-              </SelectTrigger>
-              <SelectContent>
-                {symbols.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {s}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!workspaceId || sync.isPending}
-              onClick={() => sync.mutate()}
-            >
-              <RefreshCw className={sync.isPending ? "size-4 animate-spin" : "size-4"} />
-              Sync history
-            </Button>
-          </div>
+            ) : null}
+            {liveRefreshedLabel ? (
+              <span className="text-emerald-600 dark:text-emerald-400">
+                · updated {liveRefreshedLabel}
+              </span>
+            ) : null}
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          {symbols.length === 0 ? (
+          {chartBusy ? (
             <p className="text-sm text-muted-foreground">
               Add symbols to your workspace watchlist on the Research page, then sync.
             </p>
-          ) : series.isLoading ? (
+          ) : liveSeries.isLoading && !liveSeries.data ? (
+            <p className="text-sm text-muted-foreground">Loading live price…</p>
+          ) : liveSeries.isError ? (
+            <p className="text-sm text-destructive">{liveSeries.error.message}</p>
+          ) : (
+            <LivePriceChart
+              points={liveSeries.data?.points ?? []}
+              symbol={symbol}
+              height={280}
+            />
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <CardTitle className="text-base">Actual vs predicted</CardTitle>
+            <CardDescription className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span>
+                {analysisPoints.length} minute bars
+                {withPred > 0 ? ` · ${withPred} with prediction` : " · run Sync to backfill predictions"}
+              </span>
+              {analysisRefreshedLabel ? (
+                <span className="text-muted-foreground">
+                  · snapshot {analysisRefreshedLabel}
+                </span>
+              ) : null}
+            </CardDescription>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={chartBusy || refreshAnalysis.isPending}
+            onClick={refreshAnalysisChart}
+          >
+            <RefreshCw
+              className={refreshAnalysis.isPending ? "size-4 animate-spin" : "size-4"}
+            />
+            Refresh chart
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {chartBusy ? (
+            <p className="text-sm text-muted-foreground">Select a symbol to load the analysis chart.</p>
+          ) : analysisSeries.isLoading && !analysisSeries.data ? (
             <p className="text-sm text-muted-foreground">Loading chart data…</p>
-          ) : series.isError ? (
-            <p className="text-sm text-destructive">{series.error.message}</p>
+          ) : analysisSeries.isError ? (
+            <p className="text-sm text-destructive">{analysisSeries.error.message}</p>
           ) : (
             <div className="space-y-4">
               <ActualPredictedChart
-                points={series.data?.points ?? []}
-                forwardPoints={series.data?.forwardPoints ?? []}
+                points={analysisPoints}
+                forwardPoints={analysisSeries.data?.forwardPoints ?? []}
                 symbol={symbol}
                 height={440}
                 onSelectionChange={setSelection}
@@ -229,19 +295,19 @@ export function ChartPage() {
           <div>
             <CardTitle className="text-base">Projection replay (+3D backtest)</CardTitle>
             <CardDescription className="max-w-2xl">
-              Pick a past time on the live chart, then review the formula&apos;s +3D projection
-              against real price movement in this dedicated replay view.
+              Pick a past time on the analysis chart, then review projected vs actual in the replay
+              view. Refresh the analysis chart first if you need newer history.
             </CardDescription>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button
               variant={pickMode ? "default" : "outline"}
               size="sm"
-              disabled={symbols.length === 0 || series.isLoading}
+              disabled={chartBusy || analysisSeries.isLoading || analysisPoints.length === 0}
               onClick={() => setPickMode((v) => !v)}
             >
               <History className="size-4" />
-              {pickMode ? "Click live chart…" : "Pick anchor time"}
+              {pickMode ? "Click analysis chart…" : "Pick anchor time"}
             </Button>
             {(replayProjection || pickMode) && (
               <Button variant="ghost" size="sm" onClick={clearReplay}>
@@ -254,13 +320,14 @@ export function ChartPage() {
           {!replayProjection && !projectionReplay.isPending && !pickMode && (
             <p className="rounded-lg border border-dashed py-10 text-center text-sm text-muted-foreground">
               Click <span className="font-medium text-foreground">Pick anchor time</span>, then
-              click a point on the blue line in the live chart above.
+              click a point on the blue line in the <span className="font-medium">Actual vs predicted</span>{" "}
+              chart.
             </p>
           )}
           {pickMode && !projectionReplay.isPending && !replayProjection && (
             <p className="rounded-lg border border-violet-500/30 bg-violet-500/5 py-4 text-center text-sm text-violet-900 dark:text-violet-200">
               Pick mode active — click any point on the <span className="font-medium">Live price</span>{" "}
-              line in the chart above.
+              line in the analysis chart above.
             </p>
           )}
           {(projectionReplay.isPending || replayProjection) && (
@@ -270,10 +337,10 @@ export function ChartPage() {
                 isLoading={projectionReplay.isPending}
                 onClear={clearReplay}
               />
-              {replayProjection && series.data?.points ? (
+              {replayProjection && analysisPoints.length > 0 ? (
                 <ProjectionReplayChart
                   symbol={symbol}
-                  allPoints={series.data.points}
+                  allPoints={analysisPoints}
                   replay={replayProjection}
                   height={380}
                 />

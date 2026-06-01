@@ -378,6 +378,10 @@ export const pipelineApi = {
     api.post<ResearchRefreshResult>(
       `/api/v1/workspaces/${workspaceId}/research/refresh`,
     ),
+  priceChart: (workspaceId: string, symbol: string) =>
+    api.get<PriceChartSeries>(
+      `/api/v1/workspaces/${workspaceId}/price-chart?symbol=${encodeURIComponent(symbol)}`,
+    ),
   priceChartLive: (workspaceId: string, symbol: string) =>
     api.get<PriceChartSeries>(
       `/api/v1/workspaces/${workspaceId}/price-chart/live?symbol=${encodeURIComponent(symbol)}`,
