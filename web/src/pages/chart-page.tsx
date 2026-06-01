@@ -5,6 +5,7 @@ import { toast } from "sonner"
 import { ActualPredictedChart } from "@/components/actual-predicted-chart"
 import { ChartProjectionReplayPanel } from "@/components/chart-projection-replay-panel"
 import { ChartSelectionAnalysisPanel } from "@/components/chart-selection-analysis-panel"
+import { ProjectionReplayChart } from "@/components/projection-replay-chart"
 import { WorkspaceToolbar } from "@/components/workspace-toolbar"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -29,13 +30,19 @@ function formatRefreshedAt(iso?: string): string | null {
   return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" })
 }
 
+function parseAnchorMs(iso?: string): number | null {
+  if (!iso) return null
+  const ms = new Date(iso).getTime()
+  return Number.isNaN(ms) ? null : ms
+}
+
 export function ChartPage() {
   const queryClient = useQueryClient()
   const { workspaceId, selectWorkspace, workspaces } = useWorkspace()
   const [symbol, setSymbol] = useState("")
   const [selection, setSelection] = useState<ChartSelectionAnalysis | null>(null)
   const [clearSelectionSignal, setClearSelectionSignal] = useState(0)
-  const [replayMode, setReplayMode] = useState(false)
+  const [pickMode, setPickMode] = useState(false)
   const [replayProjection, setReplayProjection] = useState<PriceChartProjectionReplay | null>(null)
 
   const watchlist = useQuery({
@@ -62,12 +69,16 @@ export function ChartPage() {
     setSelection(null)
     setClearSelectionSignal((n) => n + 1)
     setReplayProjection(null)
+    setPickMode(false)
   }, [symbol])
 
   const projectionReplay = useMutation({
     mutationFn: (anchor: PriceChartPoint) =>
       pipelineApi.priceChartProjectionReplay(workspaceId, symbol, anchor.timestamp),
-    onSuccess: (data) => setReplayProjection(data),
+    onSuccess: (data) => {
+      setReplayProjection(data)
+      setPickMode(false)
+    },
     onError: (e: Error) => toast.error(e.message),
   })
 
@@ -97,6 +108,12 @@ export function ChartPage() {
   const withPred = series.data?.points.filter((p) => p.predictedPrice1 != null).length ?? 0
   const refreshedLabel = formatRefreshedAt(series.data?.refreshedAt)
   const latest = series.data?.latestPrice
+  const highlightAnchorMs = parseAnchorMs(replayProjection?.anchor.timestamp)
+
+  const clearReplay = () => {
+    setReplayProjection(null)
+    setPickMode(false)
+  }
 
   return (
     <div className="space-y-6">
@@ -104,13 +121,9 @@ export function ChartPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Price chart</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Watchlist symbols only. Real-time Alpaca{" "}
-            <span className="font-medium text-foreground">1-minute</span> bars plus latest trade,
-            refreshed every 5 seconds. Run{" "}
-            <span className="font-medium text-foreground">Sync history</span> once for ~5 days of
-            backfill and walk-forward <span className="font-medium text-foreground">predicted_price1</span>.
-            Use <span className="font-medium text-foreground">Replay projection</span> to click a past
-            time and see what the +3D formula predicted vs what actually happened.
+            Live 1-minute prices with walk-forward predictions on top. Use the separate replay
+            chart below to inspect how the +3D formula would have looked at any past moment vs
+            what actually happened.
           </p>
         </div>
         <WorkspaceToolbar
@@ -126,7 +139,7 @@ export function ChartPage() {
       <Card>
         <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <CardTitle className="text-base">Actual vs predicted</CardTitle>
+            <CardTitle className="text-base">Live chart</CardTitle>
             <CardDescription className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <span>
                 {series.data?.points.length ?? 0} minute bars
@@ -165,18 +178,6 @@ export function ChartPage() {
               </SelectContent>
             </Select>
             <Button
-              variant={replayMode ? "default" : "outline"}
-              size="sm"
-              disabled={symbols.length === 0}
-              onClick={() => {
-                setReplayMode((v) => !v)
-                if (replayMode) setReplayProjection(null)
-              }}
-            >
-              <History className="size-4" />
-              Replay projection
-            </Button>
-            <Button
               variant="outline"
               size="sm"
               disabled={!workspaceId || sync.isPending}
@@ -205,20 +206,10 @@ export function ChartPage() {
                 height={440}
                 onSelectionChange={setSelection}
                 clearSelectionSignal={clearSelectionSignal}
-                replayMode={replayMode}
-                replayProjection={replayProjection}
+                replayMode={pickMode}
+                highlightAnchorMs={highlightAnchorMs}
                 onAnchorPick={(point) => projectionReplay.mutate(point)}
               />
-              {(replayMode || replayProjection || projectionReplay.isPending) && (
-                <ChartProjectionReplayPanel
-                  replay={replayProjection}
-                  isLoading={projectionReplay.isPending}
-                  onClear={() => {
-                    setReplayProjection(null)
-                    setReplayMode(false)
-                  }}
-                />
-              )}
               {selection ? (
                 <ChartSelectionAnalysisPanel
                   analysis={selection}
@@ -229,6 +220,65 @@ export function ChartPage() {
                 />
               ) : null}
             </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="border-violet-500/25">
+        <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <CardTitle className="text-base">Projection replay (+3D backtest)</CardTitle>
+            <CardDescription className="max-w-2xl">
+              Pick a past time on the live chart, then review the formula&apos;s +3D projection
+              against real price movement in this dedicated replay view.
+            </CardDescription>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant={pickMode ? "default" : "outline"}
+              size="sm"
+              disabled={symbols.length === 0 || series.isLoading}
+              onClick={() => setPickMode((v) => !v)}
+            >
+              <History className="size-4" />
+              {pickMode ? "Click live chart…" : "Pick anchor time"}
+            </Button>
+            {(replayProjection || pickMode) && (
+              <Button variant="ghost" size="sm" onClick={clearReplay}>
+                Clear
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {!replayProjection && !projectionReplay.isPending && !pickMode && (
+            <p className="rounded-lg border border-dashed py-10 text-center text-sm text-muted-foreground">
+              Click <span className="font-medium text-foreground">Pick anchor time</span>, then
+              click a point on the blue line in the live chart above.
+            </p>
+          )}
+          {pickMode && !projectionReplay.isPending && !replayProjection && (
+            <p className="rounded-lg border border-violet-500/30 bg-violet-500/5 py-4 text-center text-sm text-violet-900 dark:text-violet-200">
+              Pick mode active — click any point on the <span className="font-medium">Live price</span>{" "}
+              line in the chart above.
+            </p>
+          )}
+          {(projectionReplay.isPending || replayProjection) && (
+            <>
+              <ChartProjectionReplayPanel
+                replay={replayProjection}
+                isLoading={projectionReplay.isPending}
+                onClear={clearReplay}
+              />
+              {replayProjection && series.data?.points ? (
+                <ProjectionReplayChart
+                  symbol={symbol}
+                  allPoints={series.data.points}
+                  replay={replayProjection}
+                  height={380}
+                />
+              ) : null}
+            </>
           )}
         </CardContent>
       </Card>

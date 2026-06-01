@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from "react"
+import { useCallback, useEffect, useRef } from "react"
 import type { EChartsOption } from "echarts"
 import * as echarts from "echarts"
 import type { PriceChartPoint } from "@/lib/pipeline-api"
@@ -28,18 +28,8 @@ function buildOption(
   points: PriceChartPoint[],
   forwardPoints: PriceChartPoint[],
   symbol: string,
-  options: {
-    showLiveForward?: boolean
-    replay?: {
-      anchorMs: number
-      anchorClose: number
-      forwardPoints: PriceChartPoint[]
-      horizonEndMs?: number
-      actualAtHorizonMs?: number
-    } | null
-  } = {},
+  highlightAnchorMs?: number | null,
 ): EChartsOption {
-  const { showLiveForward = true, replay = null } = options
   const actual = points.map((p) => [parseTs(p.timestamp), p.close] as [number, number])
   const predicted = points.map(
     (p) => [parseTs(p.timestamp), p.predictedPrice1 ?? null] as [number, number | null],
@@ -48,10 +38,7 @@ function buildOption(
     points.length > 0 ? parseTs(points[points.length - 1]!.timestamp) : 0
 
   const forward: [number, number][] = []
-  const replayForward: [number, number][] = []
-  let replayAnchorMs = 0
-
-  if (showLiveForward && !replay && points.length > 0 && forwardPoints.length > 0) {
+  if (points.length > 0 && forwardPoints.length > 0) {
     const last = points[points.length - 1]!
     forward.push([parseTs(last.timestamp), last.close])
     for (const p of forwardPoints) {
@@ -59,21 +46,10 @@ function buildOption(
     }
   }
 
-  if (replay && replay.forwardPoints.length > 0) {
-    replayAnchorMs = replay.anchorMs
-    replayForward.push([replay.anchorMs, replay.anchorClose])
-    for (const p of replay.forwardPoints) {
-      replayForward.push([parseTs(p.timestamp), p.close])
-    }
-  }
-
   const singlePoint = points.length === 1
   const legendItems = ["Live price", "Predicted (formula)"]
   if (forward.length > 0) {
     legendItems.push("Projected (+3D)")
-  }
-  if (replayForward.length > 0) {
-    legendItems.push("Replay projection (+3D)")
   }
 
   return {
@@ -138,7 +114,7 @@ function buildOption(
       formatter: (params: unknown) => {
         const items = Array.isArray(params) ? params : [params]
         const first = items[0] as { dataIndex?: number; seriesName?: string; value?: unknown }
-        if (first?.seriesName === "Projected (+3D)" || first?.seriesName === "Replay projection (+3D)") {
+        if (first?.seriesName === "Projected (+3D)") {
           const row = first.value as [number, number] | undefined
           if (!row) return ""
           const when = formatAxisLabel(row[0])
@@ -211,6 +187,23 @@ function buildOption(
         smooth: 0.15,
         lineStyle: { width: 2, color: "#3b82f6" },
         itemStyle: { color: "#3b82f6" },
+        markLine: highlightAnchorMs
+          ? {
+              symbol: ["none", "none"],
+              silent: true,
+              data: [
+                {
+                  xAxis: highlightAnchorMs,
+                  label: {
+                    formatter: "Selected",
+                    color: "#7c3aed",
+                    fontSize: 10,
+                  },
+                  lineStyle: { color: "rgba(124,58,237,0.65)", type: "solid", width: 1.5 },
+                },
+              ],
+            }
+          : undefined,
       },
       {
         name: "Predicted (formula)",
@@ -252,61 +245,6 @@ function buildOption(
             },
           ]
         : []),
-      ...(replayForward.length > 0
-        ? [
-            {
-              name: "Replay projection (+3D)",
-              type: "line" as const,
-              data: replayForward,
-              showSymbol: false,
-              smooth: 0.2,
-              lineStyle: { width: 2.5, type: "dashed" as const, color: "#a855f7" },
-              itemStyle: { color: "#a855f7" },
-              z: 10,
-              markLine: {
-                symbol: ["none", "none"],
-                silent: true,
-                data: [
-                  {
-                    xAxis: replayAnchorMs,
-                    label: {
-                      formatter: "As of",
-                      color: "#7c3aed",
-                      fontSize: 10,
-                    },
-                    lineStyle: { color: "rgba(124,58,237,0.65)", type: "solid" as const, width: 1.5 },
-                  },
-                  ...(replay?.actualAtHorizonMs
-                    ? [
-                        {
-                          xAxis: replay.actualAtHorizonMs,
-                          label: {
-                            formatter: "Actual +3D",
-                            color: "#64748b",
-                            fontSize: 10,
-                          },
-                          lineStyle: { color: "rgba(16,185,129,0.55)", type: "dotted" as const },
-                        },
-                      ]
-                    : []),
-                  ...(replay?.horizonEndMs && !replay?.actualAtHorizonMs
-                    ? [
-                        {
-                          xAxis: replay.horizonEndMs,
-                          label: {
-                            formatter: "+3D",
-                            color: "#64748b",
-                            fontSize: 10,
-                          },
-                          lineStyle: { color: "rgba(100,116,139,0.35)", type: "dotted" as const },
-                        },
-                      ]
-                    : []),
-                ],
-              },
-            },
-          ]
-        : []),
     ],
     title: {
       text: symbol,
@@ -330,7 +268,7 @@ export function ActualPredictedChart({
   onSelectionChange,
   clearSelectionSignal = 0,
   replayMode = false,
-  replayProjection = null,
+  highlightAnchorMs = null,
   onAnchorPick,
 }: {
   points: PriceChartPoint[]
@@ -343,12 +281,8 @@ export function ActualPredictedChart({
   clearSelectionSignal?: number
   /** When true, clicking the live price line picks a replay anchor. */
   replayMode?: boolean
-  replayProjection?: {
-    anchor: PriceChartPoint
-    forwardPoints: PriceChartPoint[]
-    horizonEnd: string
-    actualAtHorizon?: PriceChartPoint
-  } | null
+  /** Vertical marker on the live chart for the selected replay anchor. */
+  highlightAnchorMs?: number | null
   onAnchorPick?: (point: PriceChartPoint) => void
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -421,19 +355,6 @@ export function ActualPredictedChart({
     [onAnchorPick, replayMode],
   )
 
-  const chartReplay = useMemo(() => {
-    if (!replayProjection) return null
-    return {
-      anchorMs: parseTs(replayProjection.anchor.timestamp),
-      anchorClose: replayProjection.anchor.close,
-      forwardPoints: replayProjection.forwardPoints,
-      horizonEndMs: parseTs(replayProjection.horizonEnd),
-      actualAtHorizonMs: replayProjection.actualAtHorizon
-        ? parseTs(replayProjection.actualAtHorizon.timestamp)
-        : undefined,
-    }
-  }, [replayProjection])
-
   const render = useCallback(() => {
     if (!containerRef.current || points.length < 1) return
     if (!chartRef.current) {
@@ -441,16 +362,10 @@ export function ActualPredictedChart({
       bindBrush(chartRef.current)
       bindClick(chartRef.current)
     }
-    chartRef.current.setOption(
-      buildOption(points, forwardPoints, symbol, {
-        showLiveForward: !replayProjection,
-        replay: chartReplay,
-      }),
-      {
-        notMerge: false,
-        lazyUpdate: true,
-      },
-    )
+    chartRef.current.setOption(buildOption(points, forwardPoints, symbol, highlightAnchorMs), {
+      notMerge: false,
+      lazyUpdate: true,
+    })
     bindClick(chartRef.current)
     restoreBrush(chartRef.current)
     chartRef.current.resize()
@@ -460,11 +375,10 @@ export function ActualPredictedChart({
   }, [
     bindBrush,
     bindClick,
-    chartReplay,
     emitSelection,
     forwardPoints,
+    highlightAnchorMs,
     points,
-    replayProjection,
     restoreBrush,
     symbol,
   ])
@@ -518,10 +432,10 @@ export function ActualPredictedChart({
       />
       <p className="text-xs text-muted-foreground">
         {replayMode
-          ? "Replay mode: click any point on the blue live price line to see what the +3D projection was at that moment (purple dashed). The full live price history stays visible."
-          : "Drag on the chart (line-X brush in the toolbar) to select a time range — stats appear below. Purple dashed line is the formula projection for the next 3 days. Enable Replay mode to walk back in time."}
+          ? "Pick mode: click the blue live price line to choose a past time — the replay chart below will show projected vs actual."
+          : "Drag on the chart (line-X brush) to select a range for stats. Purple dashed is the live +3D forward projection from now."}
         {" "}
-        Scroll or use the slider to zoom; double-click chart to reset zoom.
+        Scroll or use the slider to zoom; double-click to reset.
       </p>
     </div>
   )

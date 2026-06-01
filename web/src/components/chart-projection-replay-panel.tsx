@@ -63,18 +63,19 @@ export function ChartProjectionReplayPanel({
     >
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p className="text-sm font-medium">Projection replay (+3D)</p>
-          <p className="text-xs text-muted-foreground">
-            {isLoading
-              ? "Computing projection at selected time…"
-              : replay
-                ? `As of ${fmtWhen(replay.anchor.timestamp)} · anchor ${fmtMoney(replay.anchor.close)}`
-                : null}
-          </p>
+          {isLoading ? (
+            <p className="text-sm text-muted-foreground">Computing projection at selected time…</p>
+          ) : replay ? (
+            <p className="text-sm text-muted-foreground">
+              Anchor <span className="font-medium text-foreground">{fmtWhen(replay.anchor.timestamp)}</span>
+              {" · "}
+              <span className="font-mono tabular-nums">{fmtMoney(replay.anchor.close)}</span>
+            </p>
+          ) : null}
         </div>
         <Button type="button" variant="ghost" size="sm" onClick={onClear} disabled={isLoading}>
           <X className="size-4" />
-          Back to now
+          Clear
         </Button>
       </div>
 
