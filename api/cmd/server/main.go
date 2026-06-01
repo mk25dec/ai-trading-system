@@ -303,6 +303,7 @@ func registerAPIRoutes(r chi.Router, cfg config.Config, pool *pgxpool.Pool) {
 				r.Post("/{id}/research/refresh", researchHandler.Refresh)
 				r.Get("/{id}/price-chart", priceChartHandler.GetSeries)
 				r.Get("/{id}/price-chart/live", priceChartHandler.GetLiveSeries)
+				r.Get("/{id}/price-chart/projection-replay", priceChartHandler.GetProjectionReplay)
 				r.Post("/{id}/price-chart/sync", priceChartHandler.Sync)
 			})
 

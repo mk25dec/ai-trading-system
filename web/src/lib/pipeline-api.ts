@@ -305,6 +305,18 @@ export interface PriceChartSyncResult {
   errors?: string[]
 }
 
+export interface PriceChartProjectionReplay {
+  symbol: string
+  anchor: PriceChartPoint
+  forwardPoints: PriceChartPoint[]
+  horizonEnd: string
+  actualAtHorizon?: PriceChartPoint
+  projectedAtHorizon?: number
+  projectionError?: number
+  projectionErrorPct?: number
+  isFutureHorizon: boolean
+}
+
 export interface ResearchRefreshResult {
   symbolsProcessed: number
   candlesFetched: number
@@ -369,6 +381,10 @@ export const pipelineApi = {
   priceChartLive: (workspaceId: string, symbol: string) =>
     api.get<PriceChartSeries>(
       `/api/v1/workspaces/${workspaceId}/price-chart/live?symbol=${encodeURIComponent(symbol)}`,
+    ),
+  priceChartProjectionReplay: (workspaceId: string, symbol: string, anchorTime: string) =>
+    api.get<PriceChartProjectionReplay>(
+      `/api/v1/workspaces/${workspaceId}/price-chart/projection-replay?symbol=${encodeURIComponent(symbol)}&anchorTime=${encodeURIComponent(anchorTime)}`,
     ),
   syncPriceChart: (workspaceId: string) =>
     api.post<PriceChartSyncResult>(

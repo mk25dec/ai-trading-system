@@ -673,6 +673,29 @@ func (s *PipelineStore) LatestNewsFeatures(ctx context.Context, symbol string) (
 	return &f, nil
 }
 
+func (s *PipelineStore) NewsFeaturesAtOrBefore(ctx context.Context, symbol string, before time.Time) (*models.NewsFeatures, error) {
+	var f models.NewsFeatures
+	var finbertJSON []byte
+	err := s.pool.QueryRow(ctx, `
+		SELECT symbol, ts, news_count_1h, news_count_4h, news_count_24h,
+			avg_sentiment_1h, avg_sentiment_4h, avg_sentiment_24h, sentiment_momentum,
+			negative_news_spike, positive_news_spike, max_relevance_score_24h, finbert_metrics, created_at
+		FROM news_features WHERE symbol = $1 AND ts <= $2 ORDER BY ts DESC LIMIT 1`, symbol, before).Scan(
+		&f.Symbol, &f.Timestamp, &f.NewsCount1h, &f.NewsCount4h, &f.NewsCount24h,
+		&f.AvgSentiment1h, &f.AvgSentiment4h, &f.AvgSentiment24h, &f.SentimentMomentum,
+		&f.NegativeNewsSpike, &f.PositiveNewsSpike, &f.MaxRelevanceScore24h, &finbertJSON, &f.CreatedAt)
+	if err == pgx.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if len(finbertJSON) > 0 {
+		_ = json.Unmarshal(finbertJSON, &f.Finbert)
+	}
+	return &f, nil
+}
+
 func (s *PipelineStore) StartWorkflowRun(ctx context.Context, name string, runID *string, meta map[string]any) (string, error) {
 	mb, _ := json.Marshal(meta)
 	if meta == nil {

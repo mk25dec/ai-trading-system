@@ -52,3 +52,41 @@ func TestBuildForwardChartPoints_threeDays(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildProjectionReplay_historicalAnchor(t *testing.T) {
+	base := time.Date(2026, 5, 25, 14, 30, 0, 0, time.UTC)
+	points := make([]models.PriceChartPoint, 0, 120)
+	for i := 0; i < 120; i++ {
+		points = append(points, models.PriceChartPoint{
+			Timestamp: base.Add(time.Duration(i) * time.Hour),
+			Close:     100 + float64(i)*0.1,
+		})
+	}
+	daily := make([]models.MarketCandle, 30)
+	for i := range daily {
+		daily[i] = models.MarketCandle{Symbol: "TEST", Close: 100 + float64(i)*0.5}
+	}
+	anchorTime := base.Add(48 * time.Hour)
+	replay, err := BuildProjectionReplay("TEST", points, anchorTime, daily, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if replay.Anchor.Close <= 0 {
+		t.Fatal("expected anchor price")
+	}
+	if len(replay.ForwardPoints) == 0 {
+		t.Fatal("expected forward points")
+	}
+	if replay.ProjectedAtHorizon == nil {
+		t.Fatal("expected projected terminal price")
+	}
+	if replay.IsFutureHorizon {
+		t.Fatal("horizon should be in the past relative to test data end")
+	}
+	if replay.ActualAtHorizon == nil {
+		t.Fatal("expected actual at horizon")
+	}
+	if replay.ProjectionError == nil {
+		t.Fatal("expected projection error")
+	}
+}

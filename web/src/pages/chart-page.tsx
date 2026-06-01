@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { RefreshCw } from "lucide-react"
+import { History, RefreshCw } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import { ActualPredictedChart } from "@/components/actual-predicted-chart"
+import { ChartProjectionReplayPanel } from "@/components/chart-projection-replay-panel"
 import { ChartSelectionAnalysisPanel } from "@/components/chart-selection-analysis-panel"
 import { WorkspaceToolbar } from "@/components/workspace-toolbar"
 import { Button } from "@/components/ui/button"
@@ -16,7 +17,7 @@ import {
 } from "@/components/ui/select"
 import { useWorkspace } from "@/hooks/use-workspace"
 import type { ChartSelectionAnalysis } from "@/lib/chart-selection-analysis"
-import { pipelineApi } from "@/lib/pipeline-api"
+import { pipelineApi, type PriceChartPoint, type PriceChartProjectionReplay } from "@/lib/pipeline-api"
 
 /** Poll Alpaca snapshots + 1Min bars for near real-time prices. */
 const LIVE_POLL_MS = 5_000
@@ -34,6 +35,8 @@ export function ChartPage() {
   const [symbol, setSymbol] = useState("")
   const [selection, setSelection] = useState<ChartSelectionAnalysis | null>(null)
   const [clearSelectionSignal, setClearSelectionSignal] = useState(0)
+  const [replayMode, setReplayMode] = useState(false)
+  const [replayProjection, setReplayProjection] = useState<PriceChartProjectionReplay | null>(null)
 
   const watchlist = useQuery({
     queryKey: ["watchlist", workspaceId],
@@ -58,7 +61,15 @@ export function ChartPage() {
   useEffect(() => {
     setSelection(null)
     setClearSelectionSignal((n) => n + 1)
+    setReplayProjection(null)
   }, [symbol])
+
+  const projectionReplay = useMutation({
+    mutationFn: (anchor: PriceChartPoint) =>
+      pipelineApi.priceChartProjectionReplay(workspaceId, symbol, anchor.timestamp),
+    onSuccess: (data) => setReplayProjection(data),
+    onError: (e: Error) => toast.error(e.message),
+  })
 
   const series = useQuery({
     queryKey: ["price-chart-live", workspaceId, symbol],
@@ -98,7 +109,8 @@ export function ChartPage() {
             refreshed every 5 seconds. Run{" "}
             <span className="font-medium text-foreground">Sync history</span> once for ~5 days of
             backfill and walk-forward <span className="font-medium text-foreground">predicted_price1</span>.
-            Drag on the chart to select a range and view price features for that window.
+            Use <span className="font-medium text-foreground">Replay projection</span> to click a past
+            time and see what the +3D formula predicted vs what actually happened.
           </p>
         </div>
         <WorkspaceToolbar
@@ -153,6 +165,18 @@ export function ChartPage() {
               </SelectContent>
             </Select>
             <Button
+              variant={replayMode ? "default" : "outline"}
+              size="sm"
+              disabled={symbols.length === 0}
+              onClick={() => {
+                setReplayMode((v) => !v)
+                if (replayMode) setReplayProjection(null)
+              }}
+            >
+              <History className="size-4" />
+              Replay projection
+            </Button>
+            <Button
               variant="outline"
               size="sm"
               disabled={!workspaceId || sync.isPending}
@@ -181,7 +205,20 @@ export function ChartPage() {
                 height={440}
                 onSelectionChange={setSelection}
                 clearSelectionSignal={clearSelectionSignal}
+                replayMode={replayMode}
+                replayProjection={replayProjection}
+                onAnchorPick={(point) => projectionReplay.mutate(point)}
               />
+              {(replayMode || replayProjection || projectionReplay.isPending) && (
+                <ChartProjectionReplayPanel
+                  replay={replayProjection}
+                  isLoading={projectionReplay.isPending}
+                  onClear={() => {
+                    setReplayProjection(null)
+                    setReplayMode(false)
+                  }}
+                />
+              )}
               {selection ? (
                 <ChartSelectionAnalysisPanel
                   analysis={selection}

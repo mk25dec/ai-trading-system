@@ -67,6 +67,19 @@ type PriceChartSeries struct {
 	LatestPrice   *float64          `json:"latestPrice,omitempty"`
 }
 
+// PriceChartProjectionReplay is a walk-back +3D projection from a historical anchor.
+type PriceChartProjectionReplay struct {
+	Symbol               string            `json:"symbol"`
+	Anchor               PriceChartPoint   `json:"anchor"`
+	ForwardPoints        []PriceChartPoint `json:"forwardPoints"`
+	HorizonEnd           time.Time         `json:"horizonEnd"`
+	ActualAtHorizon      *PriceChartPoint  `json:"actualAtHorizon,omitempty"`
+	ProjectedAtHorizon   *float64          `json:"projectedAtHorizon,omitempty"`
+	ProjectionError      *float64          `json:"projectionError,omitempty"`
+	ProjectionErrorPct   *float64          `json:"projectionErrorPct,omitempty"`
+	IsFutureHorizon      bool              `json:"isFutureHorizon"`
+}
+
 type PriceChartSyncResult struct {
 	CandlesFetched       int      `json:"candlesFetched"`
 	PredictionsUpdated   int      `json:"predictionsUpdated"`

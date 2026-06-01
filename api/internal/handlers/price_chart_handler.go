@@ -27,6 +27,66 @@ func (h PriceChartHandler) GetLiveSeries(w http.ResponseWriter, r *http.Request)
 	h.respondSeries(w, r, true)
 }
 
+func (h PriceChartHandler) GetProjectionReplay(w http.ResponseWriter, r *http.Request) {
+	workspaceID := chi.URLParam(r, "id")
+	user := middleware.UserFromContext(r.Context())
+	if !h.canAccessWorkspace(r, workspaceID, user) {
+		WriteError(w, http.StatusForbidden, "access denied")
+		return
+	}
+	symbol := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("symbol")))
+	if symbol == "" {
+		WriteError(w, http.StatusBadRequest, "symbol query required")
+		return
+	}
+	anchorRaw := strings.TrimSpace(r.URL.Query().Get("anchorTime"))
+	if anchorRaw == "" {
+		WriteError(w, http.StatusBadRequest, "anchorTime query required (RFC3339)")
+		return
+	}
+	anchorTime, err := time.Parse(time.RFC3339, anchorRaw)
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid anchorTime")
+		return
+	}
+	anchorTime = anchorTime.UTC()
+
+	ok, err := watchlistContainsSymbol(r.Context(), h.Store, workspaceID, symbol)
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "watchlist check failed")
+		return
+	}
+	if !ok {
+		WriteError(w, http.StatusForbidden, "symbol not on workspace watchlist")
+		return
+	}
+
+	timeframe := services.ChartIntradayTimeframe
+	points, err := h.Store.ListPriceChartPoints(r.Context(), symbol, timeframe)
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "chart query failed")
+		return
+	}
+	if len(points) == 0 {
+		WriteError(w, http.StatusNotFound, "no chart data for symbol")
+		return
+	}
+
+	dailyAsc, _ := h.Store.CandlesForSymbolAsc(r.Context(), symbol, "1Day", 90)
+	nf, _ := h.Store.NewsFeaturesAtOrBefore(r.Context(), symbol, anchorTime)
+
+	replay, err := services.BuildProjectionReplay(symbol, points, anchorTime, dailyAsc, nf)
+	if err != nil {
+		if err == services.ErrChartAnchorNotFound {
+			WriteError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		WriteError(w, http.StatusInternalServerError, "projection replay failed")
+		return
+	}
+	writeJSON(w, http.StatusOK, replay)
+}
+
 func (h PriceChartHandler) respondSeries(w http.ResponseWriter, r *http.Request, live bool) {
 	workspaceID := chi.URLParam(r, "id")
 	user := middleware.UserFromContext(r.Context())

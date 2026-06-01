@@ -1,12 +1,15 @@
 package services
 
 import (
+	"errors"
 	"math"
 	"strings"
 	"time"
 
 	"github.com/joeydekruis/ai-trading-system/api/internal/models"
 )
+
+var ErrChartAnchorNotFound = errors.New("no chart bar at or before anchor time")
 
 const (
 	// PriceProjectionMinBars is minimum history before emitting predicted_price1 (daily).
@@ -343,4 +346,107 @@ func lerpForwardPrice(anchors []forwardHourAnchor, hour int) float64 {
 		}
 	}
 	return last.price
+}
+
+// FilterCandlesBeforeAsc keeps daily (or any) bars with timestamp <= before (inclusive).
+func FilterCandlesBeforeAsc(asc []models.MarketCandle, before time.Time) []models.MarketCandle {
+	if before.IsZero() {
+		return asc
+	}
+	out := make([]models.MarketCandle, 0, len(asc))
+	for _, c := range asc {
+		if !c.Timestamp.After(before) {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// NearestChartPointAtOrBefore returns the last point with timestamp <= t.
+func NearestChartPointAtOrBefore(points []models.PriceChartPoint, t time.Time) *models.PriceChartPoint {
+	if t.IsZero() || len(points) == 0 {
+		return nil
+	}
+	var best *models.PriceChartPoint
+	for i := range points {
+		if points[i].Timestamp.After(t) {
+			break
+		}
+		best = &points[i]
+	}
+	return best
+}
+
+// NearestChartPointAtOrAfter returns the first point with timestamp >= t.
+func NearestChartPointAtOrAfter(points []models.PriceChartPoint, t time.Time) *models.PriceChartPoint {
+	if t.IsZero() || len(points) == 0 {
+		return nil
+	}
+	for i := range points {
+		if !points[i].Timestamp.Before(t) {
+			return &points[i]
+		}
+	}
+	return &points[len(points)-1]
+}
+
+// BuildProjectionReplay computes a +3D forward path from a historical anchor and
+// compares the terminal projection to actual price at the horizon when available.
+func BuildProjectionReplay(
+	symbol string,
+	points []models.PriceChartPoint,
+	anchorTime time.Time,
+	dailyAsc []models.MarketCandle,
+	nf *models.NewsFeatures,
+) (*models.PriceChartProjectionReplay, error) {
+	anchor := NearestChartPointAtOrBefore(points, anchorTime)
+	if anchor == nil {
+		return nil, ErrChartAnchorNotFound
+	}
+	if anchor.Close <= 0 {
+		return nil, ErrChartAnchorNotFound
+	}
+
+	dailyFiltered := FilterCandlesBeforeAsc(dailyAsc, anchor.Timestamp)
+	forward := BuildForwardChartPoints(anchor.Timestamp, anchor.Close, symbol, dailyFiltered, nf)
+
+	horizonEnd := anchor.Timestamp.Add(ChartForwardHorizonDays * 24 * time.Hour)
+	now := time.Now().UTC()
+	isFuture := horizonEnd.After(now)
+
+	var projectedEnd *float64
+	if len(forward) > 0 {
+		p := forward[len(forward)-1].Close
+		projectedEnd = &p
+	}
+
+	var actual *models.PriceChartPoint
+	if !isFuture {
+		actualPt := NearestChartPointAtOrAfter(points, horizonEnd)
+		if actualPt != nil && !actualPt.Timestamp.Before(anchor.Timestamp) {
+			cp := *actualPt
+			actual = &cp
+		}
+	}
+
+	out := &models.PriceChartProjectionReplay{
+		Symbol:             symbol,
+		Anchor:             *anchor,
+		ForwardPoints:      forward,
+		HorizonEnd:         horizonEnd,
+		ActualAtHorizon:    actual,
+		ProjectedAtHorizon: projectedEnd,
+		IsFutureHorizon:    isFuture,
+	}
+
+	if actual != nil && projectedEnd != nil {
+		errVal := actual.Close - *projectedEnd
+		out.ProjectionError = &errVal
+		if *projectedEnd != 0 {
+			pct := (errVal / *projectedEnd) * 100
+			out.ProjectionErrorPct = &pct
+		}
+	}
+
+	return out, nil
 }
